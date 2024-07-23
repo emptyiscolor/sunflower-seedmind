@@ -1,0 +1,7 @@
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - langgraph
+  - langchain-openai
+  - langchain-anthropic

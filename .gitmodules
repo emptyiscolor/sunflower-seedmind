@@ -1,0 +1,3 @@
+[submodule "argus"]
+	path = argus
+	url = https://github.com/whexy/Argus.git

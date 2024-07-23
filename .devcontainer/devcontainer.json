@@ -1,0 +1,7 @@
+{
+	"name": "Python 3",
+	"image": "mcr.microsoft.com/devcontainers/anaconda:1.0-3",
+    "features": {
+        "ghcr.io/mikaello/devcontainer-features/modern-shell-utils:1.0.0": {}
+    }
+}
