@@ -1,5 +1,7 @@
 # SeedGen
 
+![](SeedGen.png)
+
 Seed Generation Framework for OSS-Fuzz
 
 ## Why Does This Project Exist?
