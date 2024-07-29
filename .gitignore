@@ -96,3 +96,8 @@ dmypy.json
 .pyre/
 .pytype/
 cython_debug/
+
+# SeedGen
+
+prebuilt/argus
+prebuilt/libcallgraph_rt.a

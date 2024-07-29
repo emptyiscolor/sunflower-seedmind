@@ -6,8 +6,8 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 RUN rustup target add x86_64-unknown-linux-musl
-COPY Argus /Argus
-RUN cd /Argus && cargo build --release --target x86_64-unknown-linux-musl
+COPY argus /argus
+RUN cd /argus && cargo build --release --target x86_64-unknown-linux-musl
 
 ## Build Image (for SeedGenInj)
 FROM golang:1.22 as seedgeninj-builder
@@ -97,7 +97,7 @@ RUN echo "Jul 14 Update" && cd / && wget https://bandfuzz.s3.amazonaws.com/seeds
 COPY seedgen-server/requirements.txt ./requirements.txt
 RUN pip3 install --no-cache-dir -r ./requirements.txt
 
-COPY --from=wrapper-builder /Argus/target/x86_64-unknown-linux-musl/release/argus /argus
+COPY --from=wrapper-builder /argus/target/x86_64-unknown-linux-musl/release/argus /argus
 COPY --from=seedgeninj-builder /app/bin/seedgen-injected /seedgen-injected
 
 # Copy Python code
