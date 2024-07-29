@@ -1,3 +1,4 @@
+use backtrace::Backtrace;
 use libc::{c_char, syscall, SYS_gettid};
 use once_cell::sync::OnceCell;
 use std::collections::{HashMap, HashSet};
@@ -18,6 +19,7 @@ pub extern "C" fn __cyg_profile_func_enter(this_fn: *mut c_void, call_site: *mut
     if !*LOGGING_ENABLED.get().unwrap_or(&false) {
         return;
     }
+
     let callee = symbolize_pc_cached((this_fn as usize + 0x1) as *mut c_void);
     let caller = symbolize_pc_cached(call_site);
 
@@ -27,10 +29,40 @@ pub extern "C" fn __cyg_profile_func_enter(this_fn: *mut c_void, call_site: *mut
         return;
     }
 
+    let resolved_caller = if caller == "<null>" {
+        // symbolize_pc cannot resolve the caller for some reason, most likely because the caller is stripped
+        // use backtrace to get the caller, thanks to this question: https://stackoverflow.com/questions/54999851/how-do-i-get-the-return-address-of-a-function
+        let current_bt = Backtrace::new_unresolved();
+
+        // use `filter_map` and `next` to replace a `for` loop, fancy Rust stuff
+        current_bt
+            .frames()
+            .iter()
+            /* skip the first 3 frames, because:
+               - the first frame is our instrumentation function
+               - the second frame is the callee itself
+               - the third frame is the caller, which is null in this case
+            */
+            .skip(3)
+            .filter_map(|frame| {
+                let recent_caller = symbolize_pc_cached(frame.ip());
+                if recent_caller != "<null>" {
+                    Some(recent_caller)
+                } else {
+                    None
+                }
+            })
+            .next()
+            .unwrap_or(caller)
+    } else {
+        caller
+    };
+
     if let Some(file) = LOG_FILE.get() {
         let tid = unsafe { syscall(SYS_gettid) };
         let mut file = file.lock().unwrap();
-        writeln!(file, "{}|{}|{}", tid, callee, caller).expect("Failed to write to log file");
+        writeln!(file, "{}|{}|{}", tid, callee, resolved_caller)
+            .expect("Failed to write to log file");
     }
 }
 
