@@ -150,6 +150,17 @@ def run_project(root, project_name, project_config, harness_binary):
         raise FileNotFoundError(
             f"Harness binary '{harness_binary}' not found in the 'out' directory"
         )
+    
+    # Setup an interactive shell in the Docker container
+    run_command = [
+        "docker",
+        "run",
+        "--privileged",
+        "--shm-size=2g",
+        "-it",
+        "--entrypoint=/bin/bash",
+    ] + mount_commands + environment_commands + [docker_image_name]
+    subprocess.run(run_command)
 
 def get_argus_binary_path():
     # Argus is a compiler wrapper, it should exists in the same directory as this script

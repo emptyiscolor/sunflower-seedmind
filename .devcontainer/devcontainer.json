@@ -5,7 +5,8 @@
         "ghcr.io/mikaello/devcontainer-features/modern-shell-utils:1": {},
 		"ghcr.io/devcontainers/features/docker-in-docker:2": {},
 		"ghcr.io/devcontainers/features/rust:1": {},
-		"ghcr.io/devcontainers-community/features/llvm:3": {}
+		"ghcr.io/devcontainers-community/features/llvm:3": {},
+		"ghcr.io/devcontainers/features/go:1": {}
 	},
 	"customizations": {
 		"vscode": {

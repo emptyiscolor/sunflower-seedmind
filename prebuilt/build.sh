@@ -12,4 +12,9 @@ cd $SCRIPT_DIR/../callgraph_rt
 cargo build --release --target x86_64-unknown-linux-musl
 cp target/x86_64-unknown-linux-musl/release/libcallgraph_rt.a $SCRIPT_DIR/../prebuilt/libcallgraph_rt.a
 
+# seedgen-injected
+cd $SCRIPT_DIR/../seedgen-injected
+make
+cp bin/seedgen-injected $SCRIPT_DIR/../prebuilt/seedgen-injected
+
 echo "Prebuilt artifacts are in prebuilt/ directory"
