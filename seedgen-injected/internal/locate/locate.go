@@ -43,7 +43,7 @@ func Locate(ctx context.Context, req *runtime.LocateRequest, lsc *LocateServerCo
 
 	log.Printf("[+] Locate request: %v\n", req)
 
-	binary := "/" + req.GetHarnessBinary()
+	binary := req.GetHarnessBinary()
 	functionName := req.GetFunctionName()
 
 	functionAddress, err := lsc.nmCache.GetFunctionAddress(binary, functionName)

@@ -10,6 +10,8 @@ import uuid
 import yaml
 import subprocess
 
+from seedgen import runtime
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Run SeedGen on an OSS-Fuzz project")
     parser.add_argument("project_name", type=str, help="Name of the OSS-Fuzz project")
@@ -96,6 +98,7 @@ def run_project(root, project_name, project_config, harness_binary):
     os.makedirs(temp_dir, exist_ok=True)
     os.makedirs(os.path.join(temp_dir, "out"), exist_ok=True)
     os.makedirs(os.path.join(temp_dir, "work"), exist_ok=True)
+    os.makedirs(os.path.join(temp_dir, "shared"), exist_ok=True)
     print(f"[+] Temporary directory: {temp_dir}")
 
     # Build the Docker image for the project
@@ -114,9 +117,11 @@ def run_project(root, project_name, project_config, harness_binary):
     mount_configs = {
         "/out": f"{temp_dir}/out",
         "/work": f"{temp_dir}/work",
+        "/shared": f"{temp_dir}/shared",
         "/argus": get_argus_binary_path(),
         "/argus++": get_argus_binary_path(),
         "/libcallgraph_rt.a": get_tinyrt_object_path(),
+        "/seedgen-injected": get_injected_runtime_path(),
     }
     mount_commands = list(itertools.chain.from_iterable(
         ("-v", f"{src}:{dest}") for dest, src in mount_configs.items()
@@ -155,12 +160,23 @@ def run_project(root, project_name, project_config, harness_binary):
     run_command = [
         "docker",
         "run",
+        "-d",
+        "-p",
+        "9002:9002",
         "--privileged",
         "--shm-size=2g",
-        "-it",
-        "--entrypoint=/bin/bash",
+        "--entrypoint=/seedgen-injected",
     ] + mount_commands + environment_commands + [docker_image_name]
     subprocess.run(run_command)
+
+def start_seedgen():
+    # Start SeedGen in the Docker container
+    rt = runtime.SeedGenRuntime()
+    rt.wait_until_ready()
+    print("[+] SeedGen service is ready, starting the seed generation process...")
+
+    # Let's try some SeedGen API calls
+    print(rt.locate("/out/xml", "LLVMFuzzerTestOneInput"))
 
 def get_argus_binary_path():
     # Argus is a compiler wrapper, it should exists in the same directory as this script
@@ -176,6 +192,13 @@ def get_tinyrt_object_path():
         raise FileNotFoundError("TinyRT binary not found")
     return tinyrt_binary_path
 
+def get_injected_runtime_path():
+    # Argus is a compiler wrapper, it should exists in the same directory as this script
+    injected_binary_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "prebuilt", "seedgen-injected")
+    if not os.path.exists(injected_binary_path):
+        raise FileNotFoundError("Injected-Runtime binary not found")
+    return injected_binary_path
+
 def main():
     args = parse_args()
     project_name = args.project_name
@@ -187,6 +210,7 @@ def main():
         project_config = load_project_config(project_yaml_path)
         print_project_info(project_name, project_config, harness_binary)
         run_project(root, project_name, project_config, harness_binary)
+        start_seedgen()
     except (FileNotFoundError, ValueError) as e:
         print(f"[-] Error: {e}", file=sys.stderr)
         sys.exit(1)

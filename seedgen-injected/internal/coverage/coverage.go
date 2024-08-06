@@ -15,7 +15,7 @@ import (
 	"sync"
 )
 
-const numCores = 48 // the number of cores we can use
+const numCores = 8 // the number of cores we can use
 
 func CopyDirectory(sourceDir, destDir string) error {
 	err := os.MkdirAll(destDir, 0755)
@@ -294,7 +294,7 @@ func mergeSeeds(binary, sourceDir, targetDir string) error {
 }
 
 func GetCoverage(ctx context.Context, req *runtime.RunRequest, lsc *locate.LocateServerComponent) (*runtime.RunResponse, error) {
-	binary := "/" + req.GetHarnessBinary()
+	binary := req.GetHarnessBinary()
 	seeds := req.GetSeedsPath()
 
 	err_response := &runtime.RunResponse{

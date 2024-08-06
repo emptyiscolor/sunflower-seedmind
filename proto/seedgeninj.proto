@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package seedgeninj;
+
+option go_package = "seedgen-injected/internal/runtime";
+
+service SeedGen {
+    rpc Locate(LocateRequest) returns (LocateResponse);
+    rpc View(ViewRequest) returns (ViewResponse);
+    rpc Share(ShareRequest) returns (ShareResponse); // share a file from the container to the shared directory
+    rpc Run(RunRequest) returns (RunResponse);
+}
+
+message LocateRequest {
+    string harness_binary = 1;
+    string function_name = 2;
+}
+
+message LocateResponse {
+    bool success = 1;
+    string filename = 2;
+    uint32 line = 3;
+}
+
+message ViewRequest {
+    string filename = 1;
+    uint32 line = 2;
+}
+
+message ViewResponse {
+    bool success = 1;
+    string source = 2;
+}
+
+message ShareRequest {
+    string filename = 1; // the filename in the container
+}
+
+message ShareResponse {
+    bool success = 1;
+    string filename = 2; // the filename in the shared directory
+}
+
+message RunRequest {
+    string harness_binary = 1;
+    repeated string seeds_path = 2;
+}
+
+message RunResponse {
+    bool success = 1;
+    string coverage = 2;
+}
