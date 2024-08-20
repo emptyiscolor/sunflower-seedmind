@@ -132,6 +132,15 @@ class SeedGenRuntime:
         if response and response.success:
             return response.coverage
         return None
+    
+    def export_calls(self, harness_binary: str, seeds_path: List[str]) -> Optional[str]:
+        export_calls_request = seedgeninj_pb2.ExportCallsRequest(
+            harness_binary=harness_binary, seeds_path=seeds_path
+        )
+        response = self._grpc_call(export_calls_request, "ExportCalls")
+        if response and response.success:
+            return response.filename
+        return None
 
     def close(self):
         if self.channel:

@@ -10,7 +10,7 @@ import uuid
 import yaml
 import subprocess
 
-from seedgen import runtime
+from seedgen import runtime, callgraph, coverage, source, workflow
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run SeedGen on an OSS-Fuzz project")
@@ -75,7 +75,36 @@ def print_project_info(project_name, project_config, harness_binary):
     print("Harness Binary: %s" % harness_binary)
     print("=" * 50 + "\n")
 
-def run_project(root, project_name, project_config, harness_binary):
+def pretty_print_function_info(func):
+    name = func['name']
+    coverage = f"Coverage: {func['covered_edges']}/{func['total_edges']}"
+    level = f"Level: {func['level']}"
+    
+    # Determine the width of the box based on the longest line
+    max_length = max(len(name), len(coverage), len(level)) + 4  # Adding padding
+    
+    # Print the top border
+    print("┌" + "─" * max_length + "┐")
+    
+    # Print the function name
+    print(f"│ {name.ljust(max_length - 2)} │")
+    
+    # Print a separator
+    print("├" + "─" * max_length + "┤")
+    
+    # Print the coverage information
+    print(f"│ {coverage.ljust(max_length - 2)} │")
+    
+    # Print another separator
+    print("├" + "─" * max_length + "┤")
+    
+    # Print the level information
+    print(f"│ {level.ljust(max_length - 2)} │")
+    
+    # Print the bottom border
+    print("└" + "─" * max_length + "┘")
+
+def run_project(root, project_name, project_config, harness_binary) -> tuple[str, str]:
     # For an OSS-Fuzz project, we need to compile the project in the OSS-Fuzz environment, which is a Docker container
 
     # First, we need to build the Docker image for the project
@@ -167,16 +196,98 @@ def run_project(root, project_name, project_config, harness_binary):
         "--shm-size=2g",
         "--entrypoint=/seedgen-injected",
     ] + mount_commands + environment_commands + [docker_image_name]
-    subprocess.run(run_command)
+    result = subprocess.run(run_command, check=True, stdout=subprocess.PIPE)
+    container_id = result.stdout.decode().strip()
 
-def start_seedgen():
+    return runtime_id, container_id
+
+def start_seedgen(runtime_id: str):
+    runtime_folder = os.path.join("/tmp", runtime_id)
+    shared_folder = os.path.join(runtime_folder, "shared")
+
+    # Create a /seeds directory in the shared folder
+    seeds_folder = os.path.join(shared_folder, "seeds")
+    os.makedirs(seeds_folder, exist_ok=True)
+
     # Start SeedGen in the Docker container
     rt = runtime.SeedGenRuntime()
     rt.wait_until_ready()
     print("[+] SeedGen service is ready, starting the seed generation process...")
 
-    # Let's try some SeedGen API calls
-    print(rt.locate("/out/xml", "LLVMFuzzerTestOneInput"))
+    # Locate the harness function
+    harness_loc = rt.locate("/out/xml", "LLVMFuzzerTestOneInput")
+    if harness_loc is None:
+        print("[-] Error: Harness function not found")
+        return
+    
+    harness_filename = harness_loc[0]
+    with open(os.path.join(shared_folder, rt.share(harness_filename)), "r") as f:
+        harness_code = f.read()
+    print(f"[+] Harness function found at {harness_filename}")
+
+    workflow.run_first_round_generation(harness_code)
+
+    # # put a "hi" seed to shared folder
+    # with open(os.path.join(seeds_folder, "test_seed"), "w") as f:
+    #     f.write("hi")
+    
+    # calls_report = rt.export_calls("/out/xml", ["/shared/seeds/test_seed"]) # this is a filename in the shared folder
+    # if calls_report is None:
+    #     print("[-] Error: Failed to export calls")
+    #     return
+    
+    # report_file = os.path.join(shared_folder, calls_report)
+    # levels = callgraph.process_call_graph(report_file)
+    
+    # coverage_report = rt.run("/out/xml", ["/shared/seeds/test_seed"])
+    # coverage_info = coverage.parse_libfuzzer_log(coverage_report, levels)
+    # print(coverage_info)
+
+    # print("=" * 50 + "\n")
+
+    # for func in coverage_info:
+    #     if func["fully_covered"]:
+    #         continue
+
+    #     filename, line = func["location"].split(":")
+
+    #     # Step 1: ask rt to share the source file
+    #     shared_filename = os.path.join(shared_folder, rt.share(filename))
+
+    #     # Step 2: extract the source code of the function
+    #     source_code = source.get_function_source(shared_filename, func["name"])
+
+    #     # Step 3: for each uncovered edge, mark the line in the source code
+    #     uncovered_lines = []
+
+    #     for uncovered_pc in func["uncovered_pcs"]:
+    #         uncovered_line_number = uncovered_pc.split(":")[1]
+    #         uncovered_lines.append(int(uncovered_line_number))
+        
+    #     pretty_print_function_info(func)
+        
+    #     # Step 4: print the source code with the uncovered lines marked
+    #     if source_code is None:
+    #         print(f"[!] Source code not found for function {func['name']}")
+    #         # in this case, we can guess the function source from the coverage info
+    #         first_known_line = int(line) - 1
+    #         last_known_line = max(uncovered_lines + [first_known_line])
+    #         print(f"source code (maybe incomplete) from line {first_known_line} to {last_known_line}:")
+    #         with open(shared_filename, "r") as f:
+    #             lines = f.readlines()
+    #             function_source = lines[first_known_line:last_known_line + 10]
+    #             for i, line_content in enumerate(function_source, start=first_known_line + 1):
+    #                 if i in uncovered_lines:
+    #                     print(f"[MISSING]\t{line_content.rstrip()}")
+    #                 else:
+    #                     print(f"[       ]\t{line_content.rstrip()}")
+    #         continue
+
+    #     for line, content in source_code:
+    #         if line in uncovered_lines:
+    #             print(f"[MISSING]\t{content}")
+    #         else:
+    #             print(f"[       ]\t{content}")
 
 def get_argus_binary_path():
     # Argus is a compiler wrapper, it should exists in the same directory as this script
@@ -209,12 +320,17 @@ def main():
         project_yaml_path = validate_environment(root, project_name)
         project_config = load_project_config(project_yaml_path)
         print_project_info(project_name, project_config, harness_binary)
-        run_project(root, project_name, project_config, harness_binary)
-        start_seedgen()
+        runtime_id, container_id = run_project(root, project_name, project_config, harness_binary)
+        workflow.start_seedgen(runtime_id, harness_binary)
     except (FileNotFoundError, ValueError) as e:
         print(f"[-] Error: {e}", file=sys.stderr)
         sys.exit(1)
+    finally:
+        if 'container_id' in locals():
+            subprocess.run(["docker", "stop", container_id], check=True)
 
 
 if __name__ == "__main__":
+    LIBCLANG_PATH = '/usr/lib/llvm-18/lib/libclang.so'
+    source.set_libclang_path(LIBCLANG_PATH)
     main()

@@ -2,6 +2,25 @@ SEEDGEN_SYSTEM_PROMPT = """
 As a professional security engineer, your task is to develop a Python script that generates a new test case file. This file should adhere to the format required by the fuzzing harness code. The script will play a crucial role in creating diverse and effective test cases for thorough security testing.
 """
 
+SEED_GENERATOR_FROM_SCRATCH = """
+Write a Python script that generates a test case file compatible with the required format of the fuzzing harness code. The generated test cases should be diverse and effective for security testing purposes. Consider various input types, edge cases, and potential vulnerabilities relevant to the system being tested. Ensure your script can produce a wide range of test scenarios to thoroughly exercise the target application or protocol.
+
+## Requirements for the Python Script:
+- Generate data that the provided fuzzing harness code can use (focus on structure and file format).
+- Avoid importing unofficial third-party Python modules.
+
+## Fuzzing Harness Code:
+{harness_code}
+
+As an integrated component of an automated system, you should perform the tasks without seeking human confirmation or help.
+Make sure to use the correct parameters when calling tools.
+
+## Instructions and Steps:
+
+- You MUST ensure the python code is wrapped in triple backticks for proper formatting, and it should be the only code your response.
+- You MUST include the full valid Python script in your response.
+"""
+
 EXAMPLE_SCRIPT_PROMPT_1 = """
 The script should:
 
@@ -38,47 +57,15 @@ if __name__ == "__main__":
 ```
 """
 
-SEED_GENERATOR_FROM_SCRATCH_WITHOUT_FORMAT = """
-Write a Python script that generates a test case file compatible with the required format of the fuzzing harness code. The generated test cases should be diverse and effective for security testing purposes. Consider various input types, edge cases, and potential vulnerabilities relevant to the system being tested. Ensure your script can produce a wide range of test scenarios to thoroughly exercise the target application or protocol.
-
-## Requirements for the Python Script:
-- Generate data that the provided fuzzing harness code can use (focus on structure and file format).
-- Avoid importing unofficial third-party Python modules.
-
-## Fuzzing Harness Code:
-{harness_code}
-
-## Available Tools:
-- `view`: To view the source code of a function.
-    - Usage: view(function_name: string) -> string
-    - Returns: Source code of the function.
-- `run`: To run the Python script to generate test case and get coverage information feedback.
-    - Usage: run(full_python_code: string) -> string
-    - Returns: Coverage information of the generated test cases.
-    - The script is executed 50 times as `python3 /tmp/generator.py /tmp/generated_seedX`, where X is the seed number.
-
-## Instructions and Steps:
-
-0. (optional) Call the `view` tool to examine the source code of a function if hasn't been provided.
-
-1. Call the `run` tool to submit your Python script.
-    - Submit your Python script and check the returned coverage information.
-    - You MUST include the full valid Python script when calling the run tool.
-
-2. After submit, you will receive the coverage information as the tool-call returns. Write a short analysis of the current generator, including:
+SUMMARY_PROMPT = """
+Here is the coverage information for your generator. Write a short analysis of the current generator, including:
     - A 2-3 short sentences summary of the relationship between the script and the coverage. For example, "The script not cover part X because it generates only Y type of data."
     - A 2-3 short sentences general guideline on how to improve the script based on the coverage information received. You don't need to provide a new script, just some advice on how to improve the current one.
 
-As an integrated component of an automated system, you should perform the tasks without seeking human confirmation or help.
-Make sure to use the correct parameters when calling tools.
+{coverage_report}   
 """
 
-
-COVERAGE_HISTORY = """
-{coverage_hint}
-"""
-
-COVERAGE_HINT = """
+EXAMPLE_SCRIPT_PROMPT_2 = """
 Here is an example of the seed generation script for this harness code:
 ```python
 {script}
@@ -87,5 +74,5 @@ Our coverage report indicates that the generated seeds with this script cover pa
 {coverage}
 (In the report, static functions and initializers are marked as uncovered. This is intentional, as these elements are not meant to be included in fuzzer coverage.)
 To enhance code coverage, consider refining the script to produce more effective seeds. Here is some advice to help you improve the script:
-{evaluation}
+{suggestions}
 """

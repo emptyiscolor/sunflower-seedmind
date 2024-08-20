@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10seedgeninj.proto\x12\nseedgeninj\">\n\rLocateRequest\x12\x16\n\x0eharness_binary\x18\x01 \x01(\t\x12\x15\n\rfunction_name\x18\x02 \x01(\t\"A\n\x0eLocateResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\x12\x0c\n\x04line\x18\x03 \x01(\r\"-\n\x0bViewRequest\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x0c\n\x04line\x18\x02 \x01(\r\"/\n\x0cViewResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0e\n\x06source\x18\x02 \x01(\t\" \n\x0cShareRequest\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\"2\n\rShareResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\"8\n\nRunRequest\x12\x16\n\x0eharness_binary\x18\x01 \x01(\t\x12\x12\n\nseeds_path\x18\x02 \x03(\t\"0\n\x0bRunResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x10\n\x08\x63overage\x18\x02 \x01(\t2\xfb\x01\n\x07SeedGen\x12?\n\x06Locate\x12\x19.seedgeninj.LocateRequest\x1a\x1a.seedgeninj.LocateResponse\x12\x39\n\x04View\x12\x17.seedgeninj.ViewRequest\x1a\x18.seedgeninj.ViewResponse\x12<\n\x05Share\x12\x18.seedgeninj.ShareRequest\x1a\x19.seedgeninj.ShareResponse\x12\x36\n\x03Run\x12\x16.seedgeninj.RunRequest\x1a\x17.seedgeninj.RunResponseB#Z!seedgen-injected/internal/runtimeb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10seedgeninj.proto\x12\nseedgeninj\">\n\rLocateRequest\x12\x16\n\x0eharness_binary\x18\x01 \x01(\t\x12\x15\n\rfunction_name\x18\x02 \x01(\t\"A\n\x0eLocateResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\x12\x0c\n\x04line\x18\x03 \x01(\r\"-\n\x0bViewRequest\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x0c\n\x04line\x18\x02 \x01(\r\"/\n\x0cViewResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0e\n\x06source\x18\x02 \x01(\t\" \n\x0cShareRequest\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\"2\n\rShareResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\"8\n\nRunRequest\x12\x16\n\x0eharness_binary\x18\x01 \x01(\t\x12\x12\n\nseeds_path\x18\x02 \x03(\t\"0\n\x0bRunResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x10\n\x08\x63overage\x18\x02 \x01(\t\"@\n\x12\x45xportCallsRequest\x12\x16\n\x0eharness_binary\x18\x01 \x01(\t\x12\x12\n\nseeds_path\x18\x02 \x03(\t\"8\n\x13\x45xportCallsResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t2\xcb\x02\n\x07SeedGen\x12?\n\x06Locate\x12\x19.seedgeninj.LocateRequest\x1a\x1a.seedgeninj.LocateResponse\x12\x39\n\x04View\x12\x17.seedgeninj.ViewRequest\x1a\x18.seedgeninj.ViewResponse\x12<\n\x05Share\x12\x18.seedgeninj.ShareRequest\x1a\x19.seedgeninj.ShareResponse\x12\x36\n\x03Run\x12\x16.seedgeninj.RunRequest\x1a\x17.seedgeninj.RunResponse\x12N\n\x0b\x45xportCalls\x12\x1e.seedgeninj.ExportCallsRequest\x1a\x1f.seedgeninj.ExportCallsResponseB#Z!seedgen-injected/internal/runtimeb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -38,6 +38,10 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_RUNREQUEST']._serialized_end=401
   _globals['_RUNRESPONSE']._serialized_start=403
   _globals['_RUNRESPONSE']._serialized_end=451
-  _globals['_SEEDGEN']._serialized_start=454
-  _globals['_SEEDGEN']._serialized_end=705
+  _globals['_EXPORTCALLSREQUEST']._serialized_start=453
+  _globals['_EXPORTCALLSREQUEST']._serialized_end=517
+  _globals['_EXPORTCALLSRESPONSE']._serialized_start=519
+  _globals['_EXPORTCALLSRESPONSE']._serialized_end=575
+  _globals['_SEEDGEN']._serialized_start=578
+  _globals['_SEEDGEN']._serialized_end=909
 # @@protoc_insertion_point(module_scope)

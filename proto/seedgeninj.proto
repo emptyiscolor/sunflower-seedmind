@@ -9,6 +9,7 @@ service SeedGen {
     rpc View(ViewRequest) returns (ViewResponse);
     rpc Share(ShareRequest) returns (ShareResponse); // share a file from the container to the shared directory
     rpc Run(RunRequest) returns (RunResponse);
+    rpc ExportCalls(ExportCallsRequest) returns (ExportCallsResponse);
 }
 
 message LocateRequest {
@@ -49,4 +50,14 @@ message RunRequest {
 message RunResponse {
     bool success = 1;
     string coverage = 2;
+}
+
+message ExportCallsRequest {
+    string harness_binary = 1;
+    repeated string seeds_path = 2;
+}
+
+message ExportCallsResponse {
+    bool success = 1;
+    string filename = 2; // the file containing the call logs
 }

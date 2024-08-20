@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"BugBuster/SeedGenInj/internal/coverage"
 	"BugBuster/SeedGenInj/internal/locate"
+	"BugBuster/SeedGenInj/internal/run"
 	"BugBuster/SeedGenInj/internal/runtime"
 	"BugBuster/SeedGenInj/internal/viewcode"
 
@@ -46,8 +46,8 @@ func (s *server) Share(ctx context.Context, req *runtime.ShareRequest) (*runtime
 	// copy the file to the shared directory, rename it to the hash of the file
 	sharedDir := "/shared"
 	fileId := uuid.New().String()
-	sharedFilename := fileId + filepath.Ext(filename)
-	sharedPath := sharedDir + sharedFilename
+	sharedFilename := fileId + ".cpp"
+	sharedPath := filepath.Join(sharedDir, sharedFilename)
 
 	sharedFile, err := os.Create(sharedPath)
 	if err != nil {
@@ -65,7 +65,11 @@ func (s *server) Share(ctx context.Context, req *runtime.ShareRequest) (*runtime
 }
 
 func (s *server) Run(ctx context.Context, req *runtime.RunRequest) (*runtime.RunResponse, error) {
-	return coverage.GetCoverage(ctx, req, s.lsc)
+	return run.GetCoverage(ctx, req, s.lsc)
+}
+
+func (s *server) ExportCalls(ctx context.Context, req *runtime.ExportCallsRequest) (*runtime.ExportCallsResponse, error) {
+	return run.ExportCalls(ctx, req)
 }
 
 func main() {

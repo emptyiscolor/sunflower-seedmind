@@ -1,16 +1,14 @@
-package coverage
+package run
 
 import (
 	"BugBuster/SeedGenInj/internal/locate"
 	"BugBuster/SeedGenInj/internal/runtime"
-	"bufio"
 	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 )
@@ -301,12 +299,12 @@ func GetCoverage(ctx context.Context, req *runtime.RunRequest, lsc *locate.Locat
 		Success: false,
 	}
 
-	harnessSourceFile, err := locate.LocateHarness(ctx, binary, lsc)
-	if err != nil {
-		log.Printf("Failed to locate harness source code: %v\n", err)
-		return err_response, err
-	}
-	harnessSourceBase := filepath.Base(harnessSourceFile)
+	// harnessSourceFile, err := locate.LocateHarness(ctx, binary, lsc)
+	// if err != nil {
+	// 	log.Printf("Failed to locate harness source code: %v\n", err)
+	// 	return err_response, err
+	// }
+	// harnessSourceBase := filepath.Base(harnessSourceFile)
 
 	tempDir, err := os.MkdirTemp("", "coverage")
 	if err != nil {
@@ -342,171 +340,172 @@ func GetCoverage(ctx context.Context, req *runtime.RunRequest, lsc *locate.Locat
 
 	// first, remember to grep the coverage from the output (use harnessSourceBase)
 	coverage := string(output)
-	harnessCoverage := ""
-	for _, line := range strings.Split(coverage, "\n") {
-		if strings.Contains(line, harnessSourceBase) {
-			harnessCoverage += line + "\n"
-		}
-	}
+	// harnessCoverage := ""
+	// for _, line := range strings.Split(coverage, "\n") {
+	// 	if strings.Contains(line, harnessSourceBase) {
+	// 		harnessCoverage += line + "\n"
+	// 	}
+	// }
 
-	coverageReport := ""
+	// coverageReport := ""
 
-	if harnessCoverage == "" {
-		harnessCoverage = "No coverage information found."
-	} else {
-		// parse the harness coverage
-		coverageInfos, err := parseCoverageInformation(harnessCoverage)
-		if err != nil {
-			log.Printf("Failed to parse coverage information: %v\n", err)
-			// use the raw coverage data
-			coverageReport = harnessCoverage
-		} else {
-			coverageSummary := generateCoverageSummary(coverageInfos)
-			coverageReport, err = generateCoverageReport(harnessSourceFile, coverageInfos)
+	// if harnessCoverage == "" {
+	// 	harnessCoverage = "No coverage information found."
+	// } else {
+	// 	// parse the harness coverage
+	// 	coverageInfos, err := parseCoverageInformation(harnessCoverage)
+	// 	if err != nil {
+	// 		log.Printf("Failed to parse coverage information: %v\n", err)
+	// 		// use the raw coverage data
+	// 		coverageReport = harnessCoverage
+	// 	} else {
+	// 		coverageSummary := generateCoverageSummary(coverageInfos)
+	// 		coverageReport, err = generateCoverageReport(harnessSourceFile, coverageInfos)
 
-			if strings.Count(coverageReport, "\n") > 1000 {
-				// if coverageReport is larger than 1000 lines, use the summary instead
-				coverageReport = coverageSummary
-				log.Printf("Coverage report is too large, using summary instead.")
-			} else {
-				// if report is not too large, we also include the summary
-				coverageReport = coverageSummary + "\n" + coverageReport
-			}
+	// 		if strings.Count(coverageReport, "\n") > 1000 {
+	// 			// if coverageReport is larger than 1000 lines, use the summary instead
+	// 			coverageReport = coverageSummary
+	// 			log.Printf("Coverage report is too large, using summary instead.")
+	// 		} else {
+	// 			// if report is not too large, we also include the summary
+	// 			coverageReport = coverageSummary + "\n" + coverageReport
+	// 		}
 
-			if err != nil {
-				log.Printf("Failed to generate coverage report: %v\n", err)
-				// use the raw coverage data
-				coverageReport = harnessCoverage
-			}
-		}
-	}
+	// 		if err != nil {
+	// 			log.Printf("Failed to generate coverage report: %v\n", err)
+	// 			// use the raw coverage data
+	// 			coverageReport = harnessCoverage
+	// 		}
+	// 	}
+	// }
 
 	response := &runtime.RunResponse{
 		Success:  true,
-		Coverage: coverageReport,
+		Coverage: coverage,
+		// Coverage: coverageReport,
 	}
 
 	return response, nil
 }
 
-type CoverageInfo struct {
-	File   string
-	Line   int
-	Status string
-	Func   string
-	Hits   int
-}
+// type CoverageInfo struct {
+// 	File   string
+// 	Line   int
+// 	Status string
+// 	Func   string
+// 	Hits   int
+// }
 
-func parseCoverageInformation(coverageData string) ([]CoverageInfo, error) {
-	var coverageInfos []CoverageInfo
-	scanner := bufio.NewScanner(strings.NewReader(coverageData))
+// func parseCoverageInformation(coverageData string) ([]CoverageInfo, error) {
+// 	var coverageInfos []CoverageInfo
+// 	scanner := bufio.NewScanner(strings.NewReader(coverageData))
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		// strip the line
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "UNCOVERED_FUNC") || strings.HasPrefix(line, "COVERED_FUNC") {
-			parts := strings.Split(line, " ")
-			fileLine := parts[len(parts)-1]
-			fileLineParts := strings.Split(fileLine, ":")
-			file := fileLineParts[0]
-			lineNumber := atoi(fileLineParts[1])
-			status := "covered_func"
-			if strings.HasPrefix(line, "UNCOVERED_FUNC") {
-				status = "uncovered_func"
-			}
-			funcName := strings.Join(parts[5:len(parts)-1], " ")
-			hits, _ := strconv.Atoi(strings.TrimPrefix(parts[2], "hits: "))
-			coverageInfos = append(coverageInfos, CoverageInfo{File: file, Line: lineNumber, Status: status, Func: funcName, Hits: hits})
-		} else if strings.HasPrefix(line, "UNCOVERED_PC") {
-			parts := strings.Split(line, " ")
-			fileLine := parts[len(parts)-1]
-			fileLineParts := strings.Split(fileLine, ":")
-			file := fileLineParts[0]
-			lineNumber := atoi(fileLineParts[1])
-			coverageInfos = append(coverageInfos, CoverageInfo{File: file, Line: lineNumber, Status: "uncovered_pc", Hits: 0})
-		}
-	}
+// 	for scanner.Scan() {
+// 		line := scanner.Text()
+// 		// strip the line
+// 		line = strings.TrimSpace(line)
+// 		if strings.HasPrefix(line, "UNCOVERED_FUNC") || strings.HasPrefix(line, "COVERED_FUNC") {
+// 			parts := strings.Split(line, " ")
+// 			fileLine := parts[len(parts)-1]
+// 			fileLineParts := strings.Split(fileLine, ":")
+// 			file := fileLineParts[0]
+// 			lineNumber := atoi(fileLineParts[1])
+// 			status := "covered_func"
+// 			if strings.HasPrefix(line, "UNCOVERED_FUNC") {
+// 				status = "uncovered_func"
+// 			}
+// 			funcName := strings.Join(parts[5:len(parts)-1], " ")
+// 			hits, _ := strconv.Atoi(strings.TrimPrefix(parts[2], "hits: "))
+// 			coverageInfos = append(coverageInfos, CoverageInfo{File: file, Line: lineNumber, Status: status, Func: funcName, Hits: hits})
+// 		} else if strings.HasPrefix(line, "UNCOVERED_PC") {
+// 			parts := strings.Split(line, " ")
+// 			fileLine := parts[len(parts)-1]
+// 			fileLineParts := strings.Split(fileLine, ":")
+// 			file := fileLineParts[0]
+// 			lineNumber := atoi(fileLineParts[1])
+// 			coverageInfos = append(coverageInfos, CoverageInfo{File: file, Line: lineNumber, Status: "uncovered_pc", Hits: 0})
+// 		}
+// 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
+// 	if err := scanner.Err(); err != nil {
+// 		return nil, err
+// 	}
 
-	return coverageInfos, nil
-}
+// 	return coverageInfos, nil
+// }
 
-func atoi(s string) int {
-	var n int
-	fmt.Sscanf(s, "%d", &n)
-	return n
-}
+// func atoi(s string) int {
+// 	var n int
+// 	fmt.Sscanf(s, "%d", &n)
+// 	return n
+// }
 
-func generateCoverageSummary(coverageInfos []CoverageInfo) string {
-	var summary strings.Builder
-	summary.WriteString("List of Uncovered Functions:\n")
-	summary.WriteString("================================\n")
+// func generateCoverageSummary(coverageInfos []CoverageInfo) string {
+// 	var summary strings.Builder
+// 	summary.WriteString("List of Uncovered Functions:\n")
+// 	summary.WriteString("================================\n")
 
-	for _, info := range coverageInfos {
-		if info.Status == "uncovered_func" {
-			summary.WriteString(fmt.Sprintf("%s at line %d\n", info.Func, info.Line))
-		}
-	}
+// 	for _, info := range coverageInfos {
+// 		if info.Status == "uncovered_func" {
+// 			summary.WriteString(fmt.Sprintf("%s at line %d\n", info.Func, info.Line))
+// 		}
+// 	}
 
-	summary.WriteString("\nList of Covered Branches:\n")
-	summary.WriteString("================================\n")
+// 	summary.WriteString("\nList of Covered Branches:\n")
+// 	summary.WriteString("================================\n")
 
-	for _, info := range coverageInfos {
-		if info.Status == "covered_func" {
-			summary.WriteString(fmt.Sprintf("%s at line %d with %d hits\n", info.Func, info.Line, info.Hits))
-		}
-	}
+// 	for _, info := range coverageInfos {
+// 		if info.Status == "covered_func" {
+// 			summary.WriteString(fmt.Sprintf("%s at line %d with %d hits\n", info.Func, info.Line, info.Hits))
+// 		}
+// 	}
 
-	return summary.String()
-}
+// 	return summary.String()
+// }
 
-func generateCoverageReport(sourceFile string, coverageInfos []CoverageInfo) (string, error) {
-	file, err := os.Open(sourceFile)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
+// func generateCoverageReport(sourceFile string, coverageInfos []CoverageInfo) (string, error) {
+// 	file, err := os.Open(sourceFile)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	defer file.Close()
 
-	lineCoverage := make(map[int]string)
-	for _, info := range coverageInfos {
-		if info.File == sourceFile {
-			lineCoverage[info.Line] = info.Status
-		}
-	}
+// 	lineCoverage := make(map[int]string)
+// 	for _, info := range coverageInfos {
+// 		if info.File == sourceFile {
+// 			lineCoverage[info.Line] = info.Status
+// 		}
+// 	}
 
-	scanner := bufio.NewScanner(file)
-	var report strings.Builder
+// 	scanner := bufio.NewScanner(file)
+// 	var report strings.Builder
 
-	report.WriteString("Coverage Report:\n")
-	report.WriteString("================================\n")
+// 	report.WriteString("Coverage Report:\n")
+// 	report.WriteString("================================\n")
 
-	lineNumber := 1
-	for scanner.Scan() {
-		line := scanner.Text()
-		status, ok := lineCoverage[lineNumber]
+// 	lineNumber := 1
+// 	for scanner.Scan() {
+// 		line := scanner.Text()
+// 		status, ok := lineCoverage[lineNumber]
 
-		if ok {
-			switch status {
-			case "covered_func":
-				report.WriteString(fmt.Sprintf("[COVERED]           | %4d | %s\n", lineNumber, line))
-			case "uncovered_func":
-				report.WriteString(fmt.Sprintf("[UNCOVERED]         | %4d | %s\n", lineNumber, line))
-			case "uncovered_pc":
-				report.WriteString(fmt.Sprintf("[Uncovered Branch]  | %4d | %s\n", lineNumber, line))
-			}
-		} else {
-			report.WriteString(fmt.Sprintf("                    | %4d | %s\n", lineNumber, line))
-		}
-		lineNumber++
-	}
+// 		if ok {
+// 			switch status {
+// 			case "covered_func":
+// 				report.WriteString(fmt.Sprintf("[COVERED]           | %4d | %s\n", lineNumber, line))
+// 			case "uncovered_func":
+// 				report.WriteString(fmt.Sprintf("[UNCOVERED]         | %4d | %s\n", lineNumber, line))
+// 			case "uncovered_pc":
+// 				report.WriteString(fmt.Sprintf("[Uncovered Branch]  | %4d | %s\n", lineNumber, line))
+// 			}
+// 		} else {
+// 			report.WriteString(fmt.Sprintf("                    | %4d | %s\n", lineNumber, line))
+// 		}
+// 		lineNumber++
+// 	}
 
-	if err := scanner.Err(); err != nil {
-		return "", err
-	}
+// 	if err := scanner.Err(); err != nil {
+// 		return "", err
+// 	}
 
-	return report.String(), nil
-}
+// 	return report.String(), nil
+// }

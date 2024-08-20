@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SeedGen_Locate_FullMethodName = "/seedgeninj.SeedGen/Locate"
-	SeedGen_View_FullMethodName   = "/seedgeninj.SeedGen/View"
-	SeedGen_Share_FullMethodName  = "/seedgeninj.SeedGen/Share"
-	SeedGen_Run_FullMethodName    = "/seedgeninj.SeedGen/Run"
+	SeedGen_Locate_FullMethodName      = "/seedgeninj.SeedGen/Locate"
+	SeedGen_View_FullMethodName        = "/seedgeninj.SeedGen/View"
+	SeedGen_Share_FullMethodName       = "/seedgeninj.SeedGen/Share"
+	SeedGen_Run_FullMethodName         = "/seedgeninj.SeedGen/Run"
+	SeedGen_ExportCalls_FullMethodName = "/seedgeninj.SeedGen/ExportCalls"
 )
 
 // SeedGenClient is the client API for SeedGen service.
@@ -33,6 +34,7 @@ type SeedGenClient interface {
 	View(ctx context.Context, in *ViewRequest, opts ...grpc.CallOption) (*ViewResponse, error)
 	Share(ctx context.Context, in *ShareRequest, opts ...grpc.CallOption) (*ShareResponse, error)
 	Run(ctx context.Context, in *RunRequest, opts ...grpc.CallOption) (*RunResponse, error)
+	ExportCalls(ctx context.Context, in *ExportCallsRequest, opts ...grpc.CallOption) (*ExportCallsResponse, error)
 }
 
 type seedGenClient struct {
@@ -83,6 +85,16 @@ func (c *seedGenClient) Run(ctx context.Context, in *RunRequest, opts ...grpc.Ca
 	return out, nil
 }
 
+func (c *seedGenClient) ExportCalls(ctx context.Context, in *ExportCallsRequest, opts ...grpc.CallOption) (*ExportCallsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExportCallsResponse)
+	err := c.cc.Invoke(ctx, SeedGen_ExportCalls_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SeedGenServer is the server API for SeedGen service.
 // All implementations must embed UnimplementedSeedGenServer
 // for forward compatibility.
@@ -91,6 +103,7 @@ type SeedGenServer interface {
 	View(context.Context, *ViewRequest) (*ViewResponse, error)
 	Share(context.Context, *ShareRequest) (*ShareResponse, error)
 	Run(context.Context, *RunRequest) (*RunResponse, error)
+	ExportCalls(context.Context, *ExportCallsRequest) (*ExportCallsResponse, error)
 	mustEmbedUnimplementedSeedGenServer()
 }
 
@@ -112,6 +125,9 @@ func (UnimplementedSeedGenServer) Share(context.Context, *ShareRequest) (*ShareR
 }
 func (UnimplementedSeedGenServer) Run(context.Context, *RunRequest) (*RunResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Run not implemented")
+}
+func (UnimplementedSeedGenServer) ExportCalls(context.Context, *ExportCallsRequest) (*ExportCallsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExportCalls not implemented")
 }
 func (UnimplementedSeedGenServer) mustEmbedUnimplementedSeedGenServer() {}
 func (UnimplementedSeedGenServer) testEmbeddedByValue()                 {}
@@ -206,6 +222,24 @@ func _SeedGen_Run_Handler(srv interface{}, ctx context.Context, dec func(interfa
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SeedGen_ExportCalls_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExportCallsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeedGenServer).ExportCalls(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeedGen_ExportCalls_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeedGenServer).ExportCalls(ctx, req.(*ExportCallsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SeedGen_ServiceDesc is the grpc.ServiceDesc for SeedGen service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -228,6 +262,10 @@ var SeedGen_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Run",
 			Handler:    _SeedGen_Run_Handler,
+		},
+		{
+			MethodName: "ExportCalls",
+			Handler:    _SeedGen_ExportCalls_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -2,6 +2,17 @@ import clang.cindex
 import sys
 import os
 
+def extract_all_functions_names(node):
+    """
+    Recursively extract all function names from the AST.
+    """
+    functions = []
+    if node.kind in {clang.cindex.CursorKind.FUNCTION_DECL, clang.cindex.CursorKind.CXX_METHOD}:
+        functions.append(node.spelling)
+    for child in node.get_children():
+        functions.extend(extract_all_functions_names(child))
+    return functions
+
 def find_function_definition(node, func_name):
     """
     Recursively search for the function definition in the AST.
@@ -40,6 +51,12 @@ def get_function_implementation(file_path, func_name):
 
     if not translation_unit:
         raise RuntimeError(f"Unable to parse the source file {file_path}.")
+    
+    # Print all function names defined in the source file
+    # functions = extract_all_functions_names(translation_unit.cursor)
+    # print(f"Functions defined in the source file: {functions}")
+
+    print_ast(translation_unit.cursor)
 
     # Find the function definition in the AST
     function_node = find_function_definition(translation_unit.cursor, func_name)
@@ -49,6 +66,14 @@ def get_function_implementation(file_path, func_name):
     # Extract the function source code
     function_source = extract_function_source(function_node)
     return function_source
+
+def print_ast(cursor, indent=0):
+    # Print the current node's spelling and kind
+    print(' ' * indent + f"Spelling: {cursor.spelling}, Kind: {cursor.kind}")
+
+    # Recursively print each child node
+    for child in cursor.get_children():
+        print_ast(child, indent + 2)
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
