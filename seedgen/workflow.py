@@ -282,7 +282,7 @@ def start_seedgen(runtime_id: str, harness_binary: str):
     print("[+] SeedGen service is ready, starting the seed generation process...")
 
     # Locate the harness function
-    harness_loc = rt.locate("/out/xml", "LLVMFuzzerTestOneInput")
+    harness_loc = rt.locate(f"/out/{harness_binary}", "LLVMFuzzerTestOneInput")
     if harness_loc is None:
         print("[-] Error: Harness function not found")
         return
