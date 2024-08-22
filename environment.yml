@@ -5,3 +5,4 @@ dependencies:
   - langgraph
   - langchain-openai
   - langchain-anthropic
+  - langchain_community

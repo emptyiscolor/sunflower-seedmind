@@ -83,7 +83,10 @@ def node_agent_generation(state: State):
             coverage=state["coverage_reports"][-1],
             suggestions=state["suggestions"][-1],
         )
-    messages = [SystemMessage(content=SEEDGEN_SYSTEM_PROMPT), HumanMessage(content=prompt)]
+    messages = [
+        SystemMessage(content=SEEDGEN_SYSTEM_PROMPT),
+        HumanMessage(content=prompt),
+    ]
     response = model.invoke(messages)
     return {
         "rounds": state["rounds"] + 1,
@@ -197,7 +200,13 @@ def node_system_evaluate_coverage(state: State):
 
         filename, line = func["location"].split(":")
 
-        shared_filename = os.path.join(shared_folder, rt.share(filename))
+        shared_file = rt.share(filename)
+        if shared_file is None:
+            print(
+                f"[-] Error: Failed to require the file from OSS-Fuzz docker container {filename} for function {func['name']}"
+            )
+            continue
+        shared_filename = os.path.join(shared_folder, shared_file)
         source_code = source.get_function_source(shared_filename, func["name"])
         uncovered_lines = []
         for uncovered_pc in func["uncovered_pcs"]:
@@ -277,6 +286,8 @@ def start_seedgen(runtime_id: str, project_name: str, harness_binary: str):
     seeds_folder = os.path.join(shared_folder, "seeds")
     os.makedirs(seeds_folder, exist_ok=True)
 
+    print("[+] Starting SeedGen workflow... The project is still compiling, let's wait for a while. You can use docker logs to check the progress.")
+
     # Start SeedGen in the Docker container
     rt = runtime.SeedGenRuntime()
     rt.wait_until_ready()
@@ -289,7 +300,13 @@ def start_seedgen(runtime_id: str, project_name: str, harness_binary: str):
         return
 
     harness_filename = harness_loc[0]
-    with open(os.path.join(shared_folder, rt.share(harness_filename)), "r") as f:
+    shared_file = rt.share(harness_filename)
+    if shared_file is None:
+        print(
+            f"[-] Error: Failed to require the harness source code file {harness_filename} from OSS-Fuzz docker container"
+        )
+        return
+    with open(os.path.join(shared_folder, shared_file), "r") as f:
         harness_code = f.read()
     print(f"[+] Harness function found at {harness_filename}")
 

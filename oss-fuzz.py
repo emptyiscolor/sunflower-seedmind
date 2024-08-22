@@ -124,6 +124,7 @@ def run_project(root, project_name, project_config, harness_binary) -> tuple[str
         "/argus++": get_argus_binary_path(),
         "/libcallgraph_rt.a": get_tinyrt_object_path(),
         "/seedgen-injected": get_injected_runtime_path(),
+        "/seedgen.sh": get_entrypoint_path(),
     }
     mount_commands = list(
         itertools.chain.from_iterable(
@@ -140,6 +141,7 @@ def run_project(root, project_name, project_config, harness_binary) -> tuple[str
         "BANDFUZZ_NATIVESANCOV": "1",  # disable loading our customized sancov.pass
         "DRIVER_PASSTHROUGH": "1",  # disable driver replacement
         "AFL_USE_ASAN": "1",  # enable ASAN
+        "ASAN_OPTIONS": "detect_leaks=0",  # disable leak detection
     }
     environment_commands = list(
         itertools.chain.from_iterable(
@@ -151,33 +153,12 @@ def run_project(root, project_name, project_config, harness_binary) -> tuple[str
         [
             "docker",
             "run",
-            "--privileged",
-            "--shm-size=2g",
-        ]
-        + mount_commands
-        + environment_commands
-        + [docker_image_name]
-    )
-    subprocess.run(run_command, check=True)
-
-    # Check if the harness binary is present in the `out` directory
-    harness_binary_path = os.path.join(temp_dir, "out", harness_binary)
-    if not os.path.exists(harness_binary_path):
-        raise FileNotFoundError(
-            f"Harness binary '{harness_binary}' not found in the 'out' directory"
-        )
-
-    # Setup an interactive shell in the Docker container
-    run_command = (
-        [
-            "docker",
-            "run",
             "-d",
             "-p",
             "9002:9002",
             "--privileged",
             "--shm-size=2g",
-            "--entrypoint=/seedgen-injected",
+            "--entrypoint=/seedgen.sh",
         ]
         + mount_commands
         + environment_commands
@@ -185,6 +166,14 @@ def run_project(root, project_name, project_config, harness_binary) -> tuple[str
     )
     result = subprocess.run(run_command, check=True, stdout=subprocess.PIPE)
     container_id = result.stdout.decode().strip()
+    
+    # Impossible to do this check here because we change to one-container mode recently
+    # Check if the harness binary is present in the `out` directory
+    # harness_binary_path = os.path.join(temp_dir, "out", harness_binary)
+    # if not os.path.exists(harness_binary_path):
+    #     raise FileNotFoundError(
+    #         f"Harness binary '{harness_binary}' not found in the 'out' directory"
+    #     )
 
     return runtime_id, container_id
 
@@ -218,6 +207,14 @@ def get_injected_runtime_path():
         raise FileNotFoundError("Injected-Runtime binary not found")
     return injected_binary_path
 
+def get_entrypoint_path():
+    # Argus is a compiler wrapper, it should exists in the same directory as this script
+    entrypoint_script_path = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "prebuilt", "seedgen.sh"
+    )
+    if not os.path.exists(entrypoint_script_path):
+        raise FileNotFoundError("Entrypoint script not found")
+    return entrypoint_script_path
 
 def main():
     args = parse_args()
@@ -242,6 +239,6 @@ def main():
 
 
 if __name__ == "__main__":
-    LIBCLANG_PATH = "/usr/lib/llvm-18/lib/libclang.so" # Path to libclang.so, run the script in dev container!
+    LIBCLANG_PATH = "/usr/lib/llvm-18/lib/libclang.so"  # Path to libclang.so, run the script in dev container!
     source.set_libclang_path(LIBCLANG_PATH)
     main()

@@ -4,6 +4,7 @@ import logging
 import time
 from typing import List, Optional
 
+import grpc._channel
 from grpc_health.v1 import health_pb2, health_pb2_grpc
 
 from . import seedgeninj_pb2
@@ -12,8 +13,7 @@ from . import seedgeninj_pb2_grpc
 # Configure logging
 logger = logging.getLogger(__name__)
 
-MAX_RETRIES = 5
-RETRY_INTERVAL = 5
+RETRY_INTERVAL = 10
 
 class SeedGenRuntime:
     def __init__(self):
@@ -38,9 +38,9 @@ class SeedGenRuntime:
         logger.info("SeedGen service is ready.")
     
     def _connect(self):
-        for attempt in range(1, MAX_RETRIES + 1):
+        while True:
             logger.info(
-                f"Connecting to the gRPC server at {self.grpc_server_address}... (attempt {attempt}/{MAX_RETRIES})"
+                f"Connecting to the gRPC server at {self.grpc_server_address}..."
             )
             try:
                 self.channel = grpc.insecure_channel(self.grpc_server_address)
@@ -56,24 +56,22 @@ class SeedGenRuntime:
                 else:
                     logger.warning("Health check failed, service is not healthy.")
                     self.channel.close()
-                    if attempt < MAX_RETRIES:
-                        self._log_and_sleep(
-                            f"Sleeping for {RETRY_INTERVAL} seconds before retrying...",
-                            RETRY_INTERVAL,
-                        )
-                    else:
-                        logger.error("Max retries reached, exiting.")
-                        raise ConnectionError("Failed to connect to gRPC server.")
-            except Exception as e:
-                logger.error(f"Unexpected error during health check: {e}")
-                if attempt < MAX_RETRIES:
                     self._log_and_sleep(
                         f"Sleeping for {RETRY_INTERVAL} seconds before retrying...",
                         RETRY_INTERVAL,
                     )
-                else:
-                    logger.error("Max retries reached, exiting.")
-                    raise ConnectionError("Failed to connect to gRPC server.")
+            except grpc._channel._InactiveRpcError as e:
+                # this is expected when the server is not ready, just retry
+                self._log_and_sleep(
+                    f"Sleeping for {RETRY_INTERVAL} seconds before retrying...",
+                    RETRY_INTERVAL,
+                )
+            except Exception as e:
+                logger.error(f"Unexpected error during health check: {e}")
+                self._log_and_sleep(
+                    f"Sleeping for {RETRY_INTERVAL} seconds before retrying...",
+                    RETRY_INTERVAL,
+                )
 
     def _perform_health_check(
         self, health_stub: health_pb2_grpc.HealthStub
