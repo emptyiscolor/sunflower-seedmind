@@ -9,13 +9,10 @@ from langchain_core.messages import (
     RemoveMessage,
 )
 from langchain_openai import ChatOpenAI
-from langchain_core.tools import tool
-from langchain_core.pydantic_v1 import BaseModel
 
 from langgraph.graph.message import add_messages
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import START, END, StateGraph, MessagesState
-from langgraph.prebuilt import ToolNode
+from langgraph.graph import START, END, StateGraph
+from langchain_community.callbacks import get_openai_callback
 
 from typing import Annotated, TypedDict
 
@@ -30,6 +27,7 @@ from .prompt_template import (
 )
 
 from . import runtime, callgraph, coverage, source
+import shutil
 
 # Define the GPT model
 model = ChatOpenAI(
@@ -69,6 +67,10 @@ class State(TypedDict):
 
 # Based on the state, generate a prompt for the model and get the response.
 def node_agent_generation(state: State):
+    remove_commands = []
+    for message in state["messages"]:
+        remove_commands.append(RemoveMessage(id=message.id))
+
     print("[+] Start agent generation, round ", state["rounds"] + 1)
     prompt = SEED_GENERATOR_FROM_SCRATCH.format(harness_code=state["harness_code"])
     if state["rounds"] == 0:
@@ -81,12 +83,11 @@ def node_agent_generation(state: State):
             coverage=state["coverage_reports"][-1],
             suggestions=state["suggestions"][-1],
         )
-    messages = state["messages"]
-    messages.append(HumanMessage(content=prompt))
+    messages = [SystemMessage(content=SEEDGEN_SYSTEM_PROMPT), HumanMessage(content=prompt)]
     response = model.invoke(messages)
     return {
         "rounds": state["rounds"] + 1,
-        "messages": [response],
+        "messages": remove_commands + [response],
     }
 
 
@@ -268,7 +269,7 @@ def edge_should_stop(state: State):
     return state["rounds"] >= 3
 
 
-def start_seedgen(runtime_id: str, harness_binary: str):
+def start_seedgen(runtime_id: str, project_name: str, harness_binary: str):
     runtime_folder = os.path.join("/tmp", runtime_id)
     shared_folder = os.path.join(runtime_folder, "shared")
 
@@ -341,7 +342,19 @@ def start_seedgen(runtime_id: str, harness_binary: str):
         "suggestions_generated": False,
     }
 
-    final_state = app.invoke(initial_state)
-    print(final_state["messages"][-1].content)
+    with get_openai_callback() as cb:
+        final_state = app.invoke(initial_state)
+        print(cb)
+
+    # Finally, save the generated seeds to the corpus
+    os.makedirs(
+        f"oss-fuzz/build/corpus/seedgen/{project_name}/{harness_binary}", exist_ok=True
+    )
+
+    for seed_file in final_state["generated_seeds"]:
+        shutil.copy(
+            f"{seeds_folder}/{seed_file}",
+            f"oss-fuzz/build/corpus/seedgen/{project_name}/{harness_binary}/{seed_file}",
+        )
 
     rt.close()
