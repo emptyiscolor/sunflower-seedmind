@@ -17,7 +17,7 @@ def parse_libfuzzer_log(log, levels):
             if current_function:
                 functions.append(current_function)
             
-            match = re.match(r"COVERED_FUNC: hits: (\d+) edges: (\d+)/(\d+) (\S+) (.+):(\d+)", line)
+            match = re.match(r"COVERED_FUNC: hits: (\d+) edges: (\d+)/(\d+) (.+) (?=\S+:\d+$)(.+):(\d+)", line)
             if match:
                 hits, covered_edges, total_edges, func_name, file_path, line_number = match.groups()
                 current_function = {
