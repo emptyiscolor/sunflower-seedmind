@@ -78,7 +78,10 @@ func main() {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.MaxRecvMsgSize(1024*1024*1024),
+		grpc.MaxSendMsgSize(1024*1024*1024),
+	)
 	runtime.RegisterSeedGenServer(grpcServer, &server{lsc: locate.NewLocateServerComponent()})
 
 	log.Println("[+] Seedgen-injected is running on port :9002")

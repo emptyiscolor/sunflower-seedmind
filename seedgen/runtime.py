@@ -43,7 +43,11 @@ class SeedGenRuntime:
                 f"Connecting to the gRPC server at {self.grpc_server_address}..."
             )
             try:
-                self.channel = grpc.insecure_channel(self.grpc_server_address)
+                options = [
+                    ('grpc.max_send_message_length', 1024 * 1024 * 1024),
+                    ('grpc.max_receive_message_length', 1024 * 1024 * 1024)
+                ]
+                self.channel = grpc.insecure_channel(self.grpc_server_address, options=options)
                 health_stub = health_pb2_grpc.HealthStub(self.channel)
                 health_check_response = self._perform_health_check(health_stub)
                 if (
