@@ -102,3 +102,5 @@ cython_debug/
 prebuilt/argus
 prebuilt/libcallgraph_rt.a
 prebuilt/seedgen-injected
+
+.tmp/

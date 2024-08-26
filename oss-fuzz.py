@@ -96,11 +96,14 @@ def run_project(root, project_name, project_config, harness_binary) -> tuple[str
     print(f"[+] Runtime ID: {runtime_id}")
 
     # In the temporary directory, create a new directory for this run, with the runtime id, and create `out` and `work` directories
-    temp_dir = os.path.join("/tmp", runtime_id)
+    temp_dir = os.path.join(".tmp", runtime_id)
     os.makedirs(temp_dir, exist_ok=True)
     os.makedirs(os.path.join(temp_dir, "out"), exist_ok=True)
     os.makedirs(os.path.join(temp_dir, "work"), exist_ok=True)
     os.makedirs(os.path.join(temp_dir, "shared"), exist_ok=True)
+
+    # get absolute path of the temp directory
+    temp_dir = os.path.abspath(temp_dir)
     print(f"[+] Temporary directory: {temp_dir}")
 
     # Build the Docker image for the project
@@ -239,6 +242,7 @@ def main():
 
 
 if __name__ == "__main__":
+    os.makedirs(".tmp", exist_ok=True)
     LIBCLANG_PATH = "/usr/lib/llvm-18/lib/libclang.so"  # Path to libclang.so, run the script in dev container!
     source.set_libclang_path(LIBCLANG_PATH)
     main()

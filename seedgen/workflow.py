@@ -139,7 +139,7 @@ def node_system_fetch_code(state: State):
 # Run the generated script to generate the seeds.
 def node_system_run_generated_script(state: State):
     generated_script = state["generated_scripts"][-1]
-    with open("/tmp/generator.py", "w") as f:
+    with open(".tmp/generator.py", "w") as f:
         f.write(generated_script)
     # Run the generated script
     seeds_folder = state["seeds_folder"]
@@ -149,7 +149,7 @@ def node_system_run_generated_script(state: State):
 
     for i in range(50):
         result = subprocess.run(
-            ["python3", "/tmp/generator.py", f"{seeds_folder}/{seeds_batch_id}_{i}"],
+            ["python3", ".tmp/generator.py", f"{seeds_folder}/{seeds_batch_id}_{i}"],
             capture_output=True,
             text=True,
         )
@@ -279,7 +279,7 @@ def edge_should_stop(state: State):
 
 
 def start_seedgen(runtime_id: str, project_name: str, harness_binary: str):
-    runtime_folder = os.path.join("/tmp", runtime_id)
+    runtime_folder = os.path.join(".tmp", runtime_id)
     shared_folder = os.path.join(runtime_folder, "shared")
 
     # Create a /seeds directory in the shared folder
