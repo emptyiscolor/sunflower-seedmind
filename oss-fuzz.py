@@ -17,9 +17,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run SeedGen on an OSS-Fuzz project")
     parser.add_argument("project_name", type=str, help="Name of the OSS-Fuzz project")
     parser.add_argument(
-        "harness_binary",
+        "harness_binaries",
         type=str,
-        help="Name of the fuzz target binary. This binary should be present in the `out` directory of the OSS-Fuzz project",
+        nargs="+",
+        help="Name of the fuzz target binaries. These binaries should be present in the `out` directory of the OSS-Fuzz project",
     )
     parser.add_argument(
         "--root",
@@ -64,7 +65,7 @@ def load_project_config(project_yaml_path):
         return project_config
 
 
-def print_project_info(project_name, project_config, harness_binary):
+def print_project_info(project_name, project_config):
     print("[+] Running SeedGen on OSS-Fuzz project: %s" % project_name)
 
     # Describe the project with a fancy banner
@@ -73,11 +74,10 @@ def print_project_info(project_name, project_config, harness_binary):
     print("Homepage: %s" % project_config.get("homepage", "N/A"))
     print("Main Repo: %s" % project_config.get("main_repo", "N/A"))
     print("Language: %s" % project_config["language"])
-    print("Harness Binary: %s" % harness_binary)
     print("=" * 50 + "\n")
 
 
-def run_project(root, project_name, project_config, harness_binary) -> tuple[str, str]:
+def run_project(root, project_name, project_config) -> tuple[str, str]:
     # For an OSS-Fuzz project, we need to compile the project in the OSS-Fuzz environment, which is a Docker container
 
     # First, we need to build the Docker image for the project
@@ -221,17 +221,16 @@ def get_entrypoint_path():
 def main():
     args = parse_args()
     project_name = args.project_name
-    harness_binary = args.harness_binary
+    harness_binaries = args.harness_binaries
     root = args.root
 
     try:
         project_yaml_path = validate_environment(root, project_name)
         project_config = load_project_config(project_yaml_path)
-        print_project_info(project_name, project_config, harness_binary)
-        runtime_id, container_id = run_project(
-            root, project_name, project_config, harness_binary
-        )
-        workflow.start_seedgen(runtime_id, container_id, project_name, harness_binary)
+        print_project_info(project_name, project_config)
+        runtime_id, container_id = run_project(root, project_name, project_config)
+        for harness_binary in harness_binaries:
+            workflow.start_seedgen(runtime_id, container_id, project_name, harness_binary)
     except (FileNotFoundError, ValueError) as e:
         print(f"[-] Error: {e}", file=sys.stderr)
         sys.exit(1)

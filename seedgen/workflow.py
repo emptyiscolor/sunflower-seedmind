@@ -1,5 +1,7 @@
+import json
 import subprocess
 import os
+import time
 import uuid
 
 from langchain_core.messages import (
@@ -85,7 +87,9 @@ def node_agent_generation(state: State):
         )
 
     # write prompt to prompt_{round}.txt in shared folder
-    with open(os.path.join(state["shared_folder"], f"prompt_{state['rounds'] + 1}.txt"), "w") as f:
+    with open(
+        os.path.join(state["shared_folder"], f"prompt_{state['rounds'] + 1}.txt"), "w"
+    ) as f:
         f.write(prompt)
 
     messages = [
@@ -110,7 +114,7 @@ def node_agent_generation_retry(state: State):
         retry_prompt = (
             "Failed to generate the seeds from the Python code. The error message is: "
             + state["seeds_generation_failed_reason"]
-            + " Can you please fix the issue?"
+            + " Can you please fix the issue? Make sure your code run like this: `python3 generate.py <output_file_path>`"
         )
     else:
         pass
@@ -162,7 +166,7 @@ def node_system_run_generated_script(state: State):
             print("[!] Failed to run the generated script.")
             return {
                 "seeds_generated": False,
-                "seeds_generation_failed_reason": result.stderr,
+                "seeds_generation_failed_reason": f"stdout: {result.stdout}, stderr: {result.stderr}",
             }
         generated_seeds_files.append(f"{seeds_batch_id}_{i}")
 
@@ -288,16 +292,24 @@ def edge_should_stop(state: State):
     return state["rounds"] >= 3
 
 
-def start_seedgen(runtime_id: str, container_id: str, project_name: str, harness_binary: str):
+def start_seedgen(
+    runtime_id: str, container_id: str, project_name: str, harness_binary: str
+):
     # in order to connect to the SeedGen runtime service in the Docker container, we need to know the IP address of the container
     # we can use the container_id to get the IP address
     ip_addr = subprocess.run(
-        ["docker", "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", container_id],
+        [
+            "docker",
+            "inspect",
+            "-f",
+            "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+            container_id,
+        ],
         capture_output=True,
         text=True,
     ).stdout.strip()
 
-    print(f"[+] The SeedGen runtime service is running at {ip_addr}")
+    print(f"[+] The SeedGen runtime service is running at {ip_addr}, waiting for it to be ready...")
 
     runtime_folder = os.path.join(".tmp", runtime_id)
     shared_folder = os.path.join(runtime_folder, "shared")
@@ -308,9 +320,8 @@ def start_seedgen(runtime_id: str, container_id: str, project_name: str, harness
 
     # Start SeedGen in the Docker container
     rt = runtime.SeedGenRuntime(ip_addr)
-    print("[+] Starting SeedGen workflow... The project is still compiling, let's wait for a while. You can use docker logs to check the progress.")
     rt.wait_until_ready()
-    print("[+] SeedGen service is ready, starting the seed generation process...")
+    print(f"[+] SeedGen service is ready, starting the seed generation process for {project_name}/{harness_binary}")
 
     # Locate the harness function
     harness_loc = rt.locate(f"/out/{harness_binary}", "LLVMFuzzerTestOneInput")
@@ -378,14 +389,31 @@ def start_seedgen(runtime_id: str, container_id: str, project_name: str, harness
         "suggestions_generated": False,
     }
 
-    with get_openai_callback() as cb:
-        final_state = app.invoke(initial_state)
-        print(cb)
-
-    # Finally, save the generated seeds to the corpus
     os.makedirs(
         f"oss-fuzz/build/corpus/seedgen/{project_name}/{harness_binary}", exist_ok=True
     )
+
+    with get_openai_callback() as cb:
+
+        start_time = time.time()
+        final_state = app.invoke(initial_state)
+        end_time = time.time()
+        total_duration = end_time - start_time
+
+        profile = {
+            "project_name": project_name,
+            "harness_binary": harness_binary,
+            "total_tokens": cb.total_tokens,
+            "prompt_tokens": cb.prompt_tokens,
+            "total_cost": cb.total_cost,
+            "time": total_duration,
+        }
+
+        with open(
+            f"oss-fuzz/build/corpus/seedgen/{project_name}/{harness_binary}.json",
+            "w",
+        ) as f:
+            f.write(json.dumps(profile))
 
     for seed_file in final_state["generated_seeds"]:
         shutil.copy(
