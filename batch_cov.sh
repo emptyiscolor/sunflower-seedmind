@@ -2,7 +2,7 @@
 
 CSV_HARNESS_FILE="/workspaces/SeedGen/filtered_harness.csv"
 OSSFUZZ_DIR="/workspaces/SeedGen/oss-fuzz"
-BUILTIN_COV_CSV="/tmp/oss-fuzz_seedgen_cov.csv"
+COV_CSV_FILE="/tmp/oss-fuzz_seedgen_cov.csv"
 
 function pre_build_project() {
     pushd $OSSFUZZ_DIR
@@ -13,13 +13,13 @@ function pre_build_project() {
     popd
 }
 
-function count_builtin_cov() {
+function count_seedgen_cov() {
   pushd $OSSFUZZ_DIR
   find build/cov_report/seedgen -name summary.json | grep report_target | while read -r summary_path; do
       binary_name=$(basename "$(dirname "$(dirname "$summary_path")")")
       project=$(basename "$(dirname "$(dirname "$(dirname "$(dirname "$summary_path")")")")")
       cov=$(jq .data[].totals.lines.percent < "$summary_path")
-      printf "$project\t$binary_name\t$cov\n" | tee -a $BUILTIN_COV_CSV
+      printf "$project\t$binary_name\t$cov\n" | tee -a $COV_CSV_FILE
   done
 
   popd
@@ -41,7 +41,6 @@ function generate_cov() {
 
     echo "Project Name: $project_name, Binary Name: $binary_name, Source Code File: $source_code_file"
 
-    # if build/cov_report/builtin/$project exists, skip
     if [ -d "$OSSFUZZ_DIR/build/corpus/seedgen/$project_name" ] ; then
       echo "Generating code coverage: $project_name"
     #   python infra/helper.py build_fuzzers --sanitizer=coverage $project_name
@@ -62,4 +61,4 @@ pre_build_project
 # 2. collect coverage
 generate_cov
 # 3. save the output to a csv
-count_builtin_cov
+count_seedgen_cov
