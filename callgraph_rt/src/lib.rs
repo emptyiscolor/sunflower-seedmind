@@ -1,77 +1,55 @@
 use backtrace::Backtrace;
-use libc::{c_char, syscall, SYS_gettid};
 use once_cell::sync::OnceCell;
 use std::collections::{HashMap, HashSet};
 use std::env;
-use std::ffi::CStr;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::os::raw::c_void;
 use std::sync::{Mutex, RwLock};
 
+
 static LOG_FILE: OnceCell<Mutex<File>> = OnceCell::new();
-static SYMBOL_CACHE: OnceCell<RwLock<HashMap<usize, String>>> = OnceCell::new();
-static SEEN_PAIRS: OnceCell<Mutex<HashSet<(String, String)>>> = OnceCell::new();
-static LOGGING_ENABLED: OnceCell<bool> = OnceCell::new();
+static SYMBOL_CACHE: OnceCell<RwLock<HashMap<usize, Option<String>>>> = OnceCell::new();
+static SEEN_PAIRS: OnceCell<Mutex<HashSet<(Option<String>, Option<String>)>>> = OnceCell::new();
+static LOGGING_ENABLED: OnceCell<Mutex<bool>> = OnceCell::new();
 
 #[no_mangle]
-pub extern "C" fn __cyg_profile_func_enter(this_fn: *mut c_void, call_site: *mut c_void) {
-    if !*LOGGING_ENABLED.get().unwrap_or(&false) {
+pub extern "C" fn __cyg_profile_func_enter_fine_i_will_do_it_myself() {
+    if !LOGGING_ENABLED.get().unwrap().lock().unwrap().clone() {
         return;
     }
 
-    let callee = symbolize_pc_cached((this_fn as usize + 0x1) as *mut c_void);
-    let caller = symbolize_pc_cached(call_site);
+    let current_bt = Backtrace::new_unresolved();
+    let frames = current_bt.frames();
+
+    let callee = frames.get(1).and_then(|frame| symbolize_pc(frame.ip()));
+    let caller = frames
+        .iter()
+        .skip(2)
+        .find_map(|frame| symbolize_pc(frame.ip()));
 
     let pair = (callee.clone(), caller.clone());
-    let mut seen_pairs = SEEN_PAIRS.get().unwrap().lock().unwrap();
-    if !seen_pairs.insert(pair) {
+    if !SEEN_PAIRS
+        .get()
+        .expect("SEEN_PAIRS not initialized")
+        .lock()
+        .unwrap()
+        .insert(pair)
+    {
         return;
     }
 
-    let resolved_caller = if caller == "<null>" {
-        // symbolize_pc cannot resolve the caller for some reason, most likely because the caller is stripped
-        // use backtrace to get the caller, thanks to this question: https://stackoverflow.com/questions/54999851/how-do-i-get-the-return-address-of-a-function
-        let current_bt = Backtrace::new_unresolved();
-
-        // use `filter_map` and `next` to replace a `for` loop, fancy Rust stuff
-        current_bt
-            .frames()
-            .iter()
-            /* skip the first 3 frames, because:
-               - the first frame is our instrumentation function
-               - the second frame is the callee itself
-               - the third frame is the caller, which is null in this case
-            */
-            .skip(3)
-            .filter_map(|frame| {
-                let recent_caller = symbolize_pc_cached(frame.ip());
-                if recent_caller != "<null>" {
-                    Some(recent_caller)
-                } else {
-                    None
-                }
-            })
-            .next()
-            .unwrap_or(caller)
-    } else {
-        caller
-    };
-
-    if let Some(file) = LOG_FILE.get() {
-        let tid = unsafe { syscall(SYS_gettid) };
-        let mut file = file.lock().unwrap();
-        writeln!(file, "{}|{}|{}", tid, callee, resolved_caller)
-            .expect("Failed to write to log file");
+    if let Some(log_file) = LOG_FILE.get() {
+        let tid = unsafe { libc::syscall(libc::SYS_gettid) };
+        let mut file = log_file.lock().expect("Failed to lock log file");
+        let callee = callee.unwrap_or("<null>".to_string());
+        let caller = caller.unwrap_or("<null>".to_string());
+        writeln!(file, "{:?}|{}|{}", tid, callee, caller).expect("Failed to write to log file");
     }
 }
 
-#[no_mangle]
-pub extern "C" fn __cyg_profile_func_exit(_: *mut c_void, _: *mut c_void) {
-    // Intentionally left blank
-}
-
-fn symbolize_pc_cached(pc: *mut c_void) -> String {
+#[inline]
+fn symbolize_pc(pc: *mut c_void) -> Option<String> {
     let pc_usize = pc as usize;
     if let Some(cache) = SYMBOL_CACHE.get() {
         if let Some(symbol) = cache.read().unwrap().get(&pc_usize) {
@@ -79,7 +57,7 @@ fn symbolize_pc_cached(pc: *mut c_void) -> String {
         }
     }
 
-    let symbol = symbolize_pc(pc);
+    let symbol = __symbolize_pc(pc);
     if let Some(cache) = SYMBOL_CACHE.get() {
         cache.write().unwrap().insert(pc_usize, symbol.clone());
     }
@@ -87,60 +65,49 @@ fn symbolize_pc_cached(pc: *mut c_void) -> String {
     symbol
 }
 
-fn symbolize_pc(pc: *mut c_void) -> String {
-    let mut buf = vec![0; 1024];
-    unsafe {
-        __sanitizer_symbolize_pc(
-            pc,
-            c"%f".as_ptr(),
-            buf.as_mut_ptr() as *mut c_char,
-            buf.len(),
-        );
-    }
-    unsafe { CStr::from_ptr(buf.as_ptr() as *const c_char) }
-        .to_string_lossy()
-        .into_owned()
-}
-
-extern "C" {
-    fn __sanitizer_symbolize_pc(
-        pc: *mut c_void,
-        fmt: *const c_char,
-        out_buf: *mut c_char,
-        out_buf_size: usize,
-    );
+#[inline]
+/// Mimics the behavior of `__sanitizer_symbolize_pc` from ASAN, but uses `backtrace` crate to resolve the symbol and return the function name.
+fn __symbolize_pc(pc: *mut c_void) -> Option<String> {
+    let mut result = None;
+    backtrace::resolve(pc, |symbol| {
+        if let Some(symbol_name) = symbol.name() {
+            result = Some(symbol_name.to_string());
+        }
+    });
+    result
 }
 
 #[ctor::ctor]
 fn init() {
     let logging_enabled = env::var("EXPORT_CALLS").is_ok();
-    LOGGING_ENABLED
-        .set(logging_enabled)
-        .expect("Failed to set logging enabled");
+    LOGGING_ENABLED.get_or_init(|| Mutex::new(logging_enabled));
 
     if logging_enabled {
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open("/tmp/callgraph.log")
-            .expect("Failed to open log file");
-
-        LOG_FILE
-            .set(Mutex::new(file))
-            .expect("Failed to set log file");
-        SYMBOL_CACHE
-            .set(RwLock::new(HashMap::new()))
-            .expect("Failed to set symbol cache");
-        SEEN_PAIRS
-            .set(Mutex::new(HashSet::new()))
-            .expect("Failed to set seen pairs");
+        initialize_logging();
     }
+}
+
+fn initialize_logging() {
+    let file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open("/tmp/callgraph.log")
+        .expect("Failed to open log file");
+    LOG_FILE
+        .set(Mutex::new(file))
+        .expect("Failed to set log file");
+    SYMBOL_CACHE
+        .set(RwLock::new(HashMap::new()))
+        .expect("Failed to set symbol cache");
+    SEEN_PAIRS
+        .set(Mutex::new(HashSet::new()))
+        .expect("Failed to set seen pairs");
 }
 
 #[ctor::dtor]
 fn cleanup() {
-    if *LOGGING_ENABLED.get().unwrap_or(&false) {
+    if LOGGING_ENABLED.get().unwrap().lock().unwrap().clone() {
         if let Some(file) = LOG_FILE.get() {
             let _ = file.lock().unwrap().sync_all();
         }

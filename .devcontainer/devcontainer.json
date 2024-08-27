@@ -12,7 +12,8 @@
 		"vscode": {
 			"extensions": [
 				"ms-python.black-formatter",
-				"ms-toolsai.jupyter"
+				"ms-toolsai.jupyter",
+				"llvm-vs-code-extensions.vscode-clangd"
 			]
 		}
 	}

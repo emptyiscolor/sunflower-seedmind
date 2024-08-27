@@ -28,6 +28,18 @@ def parse_args():
         default="oss-fuzz",
         help="Path to the OSS-Fuzz root directory",
     )
+    parser.add_argument(
+        "--level",
+        type=int,
+        default=0,
+        help="Maximum level of the callgraph to be generated, 0 means no limit",
+    )
+    parser.add_argument(
+        "--budget",
+        type=float,
+        default=0.1,
+        help="Maximum budget of LLM usages, default is $0.1",
+    )
     return parser.parse_args()
 
 
@@ -123,9 +135,10 @@ def run_project(root, project_name, project_config) -> tuple[str, str]:
         "/out": f"{temp_dir}/out",
         "/work": f"{temp_dir}/work",
         "/shared": f"{temp_dir}/shared",
-        "/argus": get_argus_binary_path(),
-        "/argus++": get_argus_binary_path(),
+        "/clang-argus": get_argus_binary_path(),
+        "/clang-argus++": get_argus_binary_path(),
         "/libcallgraph_rt.a": get_tinyrt_object_path(),
+        "/FineIWillDoItMyselfPass.so": get_function_call_pass_path(),
         "/seedgen-injected": get_injected_runtime_path(),
         "/seedgen.sh": get_entrypoint_path(),
     }
@@ -137,15 +150,13 @@ def run_project(root, project_name, project_config) -> tuple[str, str]:
     # Setup the environment variables
     environment_configs = {
         "FUZZING_LANGUAGE": project_config["language"],
-        "CC": "/argus",
-        "CXX": "/argus++",
+        "CC": "/clang-argus",
+        "CXX": "/clang-argus++",
         "BANDFUZZ_RUNTIME": "libcallgraph_rt.a",  # linking runtime to the target
         "BANDFUZZ_FUNCINSTR": "1",  # enable function-level instrumentation
         "BANDFUZZ_NATIVESANCOV": "1",  # disable loading our customized sancov.pass
         "DRIVER_PASSTHROUGH": "1",  # disable driver replacement
-        "AFL_USE_ASAN": "1",  # enable ASAN
-        "ASAN_OPTIONS": "detect_leaks=0",  # disable leak detection
-        "BANDFUZZ_OPT": "0", # disable optimization (-O0)
+        "BANDFUZZ_OPT": "0",  # disable optimization (-O0)
     }
     environment_commands = list(
         itertools.chain.from_iterable(
@@ -168,7 +179,7 @@ def run_project(root, project_name, project_config) -> tuple[str, str]:
     )
     result = subprocess.run(run_command, check=True, stdout=subprocess.PIPE)
     container_id = result.stdout.decode().strip()
-    
+
     # Impossible to do this check here because we change to one-container mode recently
     # Check if the harness binary is present in the `out` directory
     # harness_binary_path = os.path.join(temp_dir, "out", harness_binary)
@@ -200,6 +211,18 @@ def get_tinyrt_object_path():
     return tinyrt_binary_path
 
 
+def get_function_call_pass_path():
+    # FunctionCall is a pass (fine_i_will_do_it_myself_pass), which call a function to record the function call relationship at the beginning of each function
+    function_call_pass_path = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        "prebuilt",
+        "FineIWillDoItMyselfPass.so",
+    )
+    if not os.path.exists(function_call_pass_path):
+        raise FileNotFoundError("Function Call pass not found")
+    return function_call_pass_path
+
+
 def get_injected_runtime_path():
     # Argus is a compiler wrapper, it should exists in the same directory as this script
     injected_binary_path = os.path.join(
@@ -209,6 +232,7 @@ def get_injected_runtime_path():
         raise FileNotFoundError("Injected-Runtime binary not found")
     return injected_binary_path
 
+
 def get_entrypoint_path():
     # Argus is a compiler wrapper, it should exists in the same directory as this script
     entrypoint_script_path = os.path.join(
@@ -217,6 +241,7 @@ def get_entrypoint_path():
     if not os.path.exists(entrypoint_script_path):
         raise FileNotFoundError("Entrypoint script not found")
     return entrypoint_script_path
+
 
 def main():
     args = parse_args()
@@ -230,7 +255,9 @@ def main():
         print_project_info(project_name, project_config)
         runtime_id, container_id = run_project(root, project_name, project_config)
         for harness_binary in harness_binaries:
-            workflow.start_seedgen(runtime_id, container_id, project_name, harness_binary)
+            workflow.start_seedgen(
+                runtime_id, container_id, project_name, harness_binary
+            )
     except (FileNotFoundError, ValueError) as e:
         print(f"[-] Error: {e}", file=sys.stderr)
         sys.exit(1)
