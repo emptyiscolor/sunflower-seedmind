@@ -83,6 +83,11 @@ def node_agent_generation(state: State):
             coverage=state["coverage_reports"][-1],
             suggestions=state["suggestions"][-1],
         )
+
+    # write prompt to prompt_{round}.txt in shared folder
+    with open(os.path.join(state["shared_folder"], f"prompt_{state['rounds'] + 1}.txt"), "w") as f:
+        f.write(prompt)
+
     messages = [
         SystemMessage(content=SEEDGEN_SYSTEM_PROMPT),
         HumanMessage(content=prompt),
@@ -190,6 +195,11 @@ def node_system_evaluate_coverage(state: State):
     coverage_report = rt.run(
         f"/out/{harness_binary}", [f"/shared/seeds/{i}" for i in generated_seeds]
     )
+
+    # write coverage report to coverage_{round}.txt in shared folder
+    with open(os.path.join(shared_folder, f"coverage_{state['rounds']}.txt"), "w") as f:
+        f.write(coverage_report)
+
     coverage_info = coverage.parse_libfuzzer_log(coverage_report, levels)
 
     summary = []

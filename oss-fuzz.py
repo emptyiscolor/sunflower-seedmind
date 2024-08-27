@@ -145,6 +145,7 @@ def run_project(root, project_name, project_config, harness_binary) -> tuple[str
         "DRIVER_PASSTHROUGH": "1",  # disable driver replacement
         "AFL_USE_ASAN": "1",  # enable ASAN
         "ASAN_OPTIONS": "detect_leaks=0",  # disable leak detection
+        "BANDFUZZ_OPT": "0", # disable optimization (-O0)
     }
     environment_commands = list(
         itertools.chain.from_iterable(
