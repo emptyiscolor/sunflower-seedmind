@@ -16,8 +16,9 @@ logger = logging.getLogger(__name__)
 RETRY_INTERVAL = 10
 
 class SeedGenRuntime:
-    def __init__(self):
-        self.grpc_server_address = "localhost:9002"
+    def __init__(self, ip_addr: str):
+        self.ip_addr = ip_addr
+        self.grpc_server_address = f"{ip_addr}:9002"
         self.service_name = "seedgen-injected"
         self.timeout = 5
         self.channel = None

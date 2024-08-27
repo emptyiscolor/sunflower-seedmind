@@ -288,7 +288,17 @@ def edge_should_stop(state: State):
     return state["rounds"] >= 3
 
 
-def start_seedgen(runtime_id: str, project_name: str, harness_binary: str):
+def start_seedgen(runtime_id: str, container_id: str, project_name: str, harness_binary: str):
+    # in order to connect to the SeedGen runtime service in the Docker container, we need to know the IP address of the container
+    # we can use the container_id to get the IP address
+    ip_addr = subprocess.run(
+        ["docker", "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", container_id],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    print(f"[+] The SeedGen runtime service is running at {ip_addr}")
+
     runtime_folder = os.path.join(".tmp", runtime_id)
     shared_folder = os.path.join(runtime_folder, "shared")
 
@@ -296,10 +306,9 @@ def start_seedgen(runtime_id: str, project_name: str, harness_binary: str):
     seeds_folder = os.path.join(shared_folder, "seeds")
     os.makedirs(seeds_folder, exist_ok=True)
 
-    print("[+] Starting SeedGen workflow... The project is still compiling, let's wait for a while. You can use docker logs to check the progress.")
-
     # Start SeedGen in the Docker container
-    rt = runtime.SeedGenRuntime()
+    rt = runtime.SeedGenRuntime(ip_addr)
+    print("[+] Starting SeedGen workflow... The project is still compiling, let's wait for a while. You can use docker logs to check the progress.")
     rt.wait_until_ready()
     print("[+] SeedGen service is ready, starting the seed generation process...")
 

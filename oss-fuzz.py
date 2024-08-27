@@ -158,8 +158,6 @@ def run_project(root, project_name, project_config, harness_binary) -> tuple[str
             "docker",
             "run",
             "-d",
-            "-p",
-            "9002:9002",
             "--privileged",
             "--shm-size=2g",
             "--entrypoint=/seedgen.sh",
@@ -233,7 +231,7 @@ def main():
         runtime_id, container_id = run_project(
             root, project_name, project_config, harness_binary
         )
-        workflow.start_seedgen(runtime_id, project_name, harness_binary)
+        workflow.start_seedgen(runtime_id, container_id, project_name, harness_binary)
     except (FileNotFoundError, ValueError) as e:
         print(f"[-] Error: {e}", file=sys.stderr)
         sys.exit(1)
