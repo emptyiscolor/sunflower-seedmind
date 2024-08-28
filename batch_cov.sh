@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CSV_HARNESS_FILE="/workspaces/SeedGen/filtered_harness.csv"
+CSV_HARNESS_FILE="/workspaces/SeedGen/data/filtered_harness.csv"
 OSSFUZZ_DIR="/workspaces/SeedGen/oss-fuzz"
 COV_CSV_FILE="/tmp/oss-fuzz_seedgen_cov.csv"
 
