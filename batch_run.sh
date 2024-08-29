@@ -12,7 +12,7 @@ while IFS= read -r harness; do
     echo $fields
     mkdir -p /tmp/logs/$project_name
     # timeout $TIMEOUT echo python oss-fuzz.py $project_name $binary_name 2>&1 
-    timeout $TIMEOUT python oss-fuzz.py $project_name $binary_name 2>&1 | tee /tmp/logs/$project_name/batch_run.log
+    timeout $TIMEOUT python oss-fuzz.py --level 5 --budget 0.5 $project_name $binary_name 2>&1 | tee /tmp/logs/$project_name/batch_run.log
     # Capture the exit code of the `timeout` command
     exit_code=$?
 
