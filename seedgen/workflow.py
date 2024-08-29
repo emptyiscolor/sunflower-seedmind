@@ -14,7 +14,7 @@ from langchain_openai import ChatOpenAI
 
 from langgraph.graph.message import add_messages
 from langgraph.graph import START, END, StateGraph
-from langchain_community.callbacks import get_openai_callback
+from langchain_community.callbacks import get_openai_callback, OpenAICallbackHandler
 
 from typing import Annotated, TypedDict
 
@@ -44,6 +44,8 @@ class State(TypedDict):
     shared_folder: str
     seeds_folder: str
     rt: runtime.SeedGenRuntime
+    cb: OpenAICallbackHandler
+    budget: float
 
     # States
     rounds: int
@@ -289,11 +291,20 @@ def edge_seeds_generated(state: State):
 
 
 def edge_should_stop(state: State):
-    return state["rounds"] >= 3
+    # return state["rounds"] >= 3
+    # check if we're over budget
+    print("Current cost: ", state["cb"].total_cost)
+    print("Budget: ", state["budget"])
+    if state["cb"].total_cost >= state["budget"]:
+        print("We're over budget, let's stop")
+        return True
+    else:
+        print("Let's continue")
+        return False
 
 
 def start_seedgen(
-    runtime_id: str, container_id: str, project_name: str, harness_binary: str
+    runtime_id: str, container_id: str, project_name: str, harness_binary: str, budget: float
 ):
     # in order to connect to the SeedGen runtime service in the Docker container, we need to know the IP address of the container
     # we can use the container_id to get the IP address
@@ -394,6 +405,8 @@ def start_seedgen(
     )
 
     with get_openai_callback() as cb:
+        initial_state["cb"] = cb
+        initial_state["budget"] = budget
 
         start_time = time.time()
         final_state = app.invoke(initial_state)

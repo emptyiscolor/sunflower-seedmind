@@ -247,6 +247,7 @@ def main():
     args = parse_args()
     project_name = args.project_name
     harness_binaries = args.harness_binaries
+    budget = args.budget
     root = args.root
 
     try:
@@ -256,7 +257,7 @@ def main():
         runtime_id, container_id = run_project(root, project_name, project_config)
         for harness_binary in harness_binaries:
             workflow.start_seedgen(
-                runtime_id, container_id, project_name, harness_binary
+                runtime_id, container_id, project_name, harness_binary, budget
             )
     except (FileNotFoundError, ValueError) as e:
         print(f"[-] Error: {e}", file=sys.stderr)
