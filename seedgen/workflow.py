@@ -15,6 +15,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph.message import add_messages
 from langgraph.graph import START, END, StateGraph
 from langchain_community.callbacks import get_openai_callback, OpenAICallbackHandler
+from langchain_core.runnables import RunnableConfig
 
 from typing import Annotated, TypedDict
 
@@ -98,6 +99,7 @@ def node_agent_generation(state: State):
         SystemMessage(content=SEEDGEN_SYSTEM_PROMPT),
         HumanMessage(content=prompt),
     ]
+
     response = model.invoke(messages)
     return {
         "rounds": state["rounds"] + 1,
@@ -159,18 +161,27 @@ def node_system_run_generated_script(state: State):
     generated_seeds_files = []
 
     for i in range(50):
-        result = subprocess.run(
-            ["python3", ".tmp/generator.py", f"{seeds_folder}/{seeds_batch_id}_{i}"],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            print("[!] Failed to run the generated script.")
+        try:
+            result = subprocess.run(
+                ["python3", ".tmp/generator.py", f"{seeds_folder}/{seeds_batch_id}_{i}"],
+                capture_output=True,
+                text=True,
+                timeout=30  # Set the timeout to 30 seconds
+            )
+            if result.returncode != 0:
+                print("[!] Failed to run the generated script.")
+                return {
+                    "seeds_generated": False,
+                    "seeds_generation_failed_reason": f"stdout: {result.stdout}, stderr: {result.stderr}",
+                }
+            generated_seeds_files.append(f"{seeds_batch_id}_{i}")
+        except subprocess.TimeoutExpired:
+            print("[!] The script timed out.")
             return {
                 "seeds_generated": False,
-                "seeds_generation_failed_reason": f"stdout: {result.stdout}, stderr: {result.stderr}",
+                "seeds_generation_failed_reason": "The script timed out after 30 seconds.",
             }
-        generated_seeds_files.append(f"{seeds_batch_id}_{i}")
+
 
     print(f"[+] Seeds generated successfully in {seeds_folder}")
     return {
@@ -409,7 +420,8 @@ def start_seedgen(
         initial_state["budget"] = budget
 
         start_time = time.time()
-        final_state = app.invoke(initial_state)
+        config = RunnableConfig(recursion_limit=1000)
+        final_state = app.invoke(initial_state, config=config)
         end_time = time.time()
         total_duration = end_time - start_time
 
