@@ -55,6 +55,7 @@ pub extern "C" fn __cyg_profile_func_enter_fine_i_will_do_it_myself() {
         let callee = callee.unwrap_or("<null>".to_string());
         let caller = caller.unwrap_or("<null>".to_string());
         writeln!(file, "{:?}|{}|{}", tid, callee, caller).expect("Failed to write to log file");
+        let _ = file.sync_all();
     }
 }
 
@@ -103,13 +104,4 @@ fn initialize_logging() {
     SEEN_PAIRS
         .set(Mutex::new(HashSet::new()))
         .expect("Failed to set seen pairs");
-}
-
-#[ctor::dtor]
-fn cleanup() {
-    if LOGGING_ENABLED.get().unwrap().lock().unwrap().clone() {
-        if let Some(file) = LOG_FILE.get() {
-            let _ = file.lock().unwrap().sync_all();
-        }
-    }
 }
