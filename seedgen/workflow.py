@@ -47,6 +47,7 @@ class State(TypedDict):
     rt: runtime.SeedGenRuntime
     cb: OpenAICallbackHandler
     budget: float
+    start_time: float
 
     # States
     rounds: int
@@ -310,8 +311,13 @@ def edge_should_stop(state: State):
         print("We're over budget, let's stop")
         return True
     else:
-        print("Let's continue")
-        return False
+        # check if we've been running for more than 30 minutes
+        if time.time() - state["start_time"] > 30 * 60:
+            print("We've been running for more than 30 minutes, let's stop")
+            return True
+        else:
+            print("Let's continue")
+            return False
 
 
 def start_seedgen(
@@ -397,6 +403,7 @@ def start_seedgen(
         "seeds_folder": seeds_folder,
         "rt": rt,
         "rounds": 0,
+        "start_time": time.time(),
         "messages": [
             SystemMessage(content=SEEDGEN_SYSTEM_PROMPT),
         ],
