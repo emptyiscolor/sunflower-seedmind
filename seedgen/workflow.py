@@ -33,8 +33,14 @@ from . import runtime, callgraph, coverage, source
 import shutil
 
 # Define the GPT model
+# model = ChatOpenAI(
+#     model="gpt-4o-mini", api_key="sk-whexy", base_url="https://litellm.mudd.cc"
+# )
+
 model = ChatOpenAI(
-    model="gpt-4o-mini", api_key="sk-whexy", base_url="https://litellm.mudd.cc"
+    model="claude-3-5-sonnet-20240620",
+    api_key="sk-whexy",
+    base_url="https://litellm.mudd.cc",
 )
 
 
@@ -164,10 +170,14 @@ def node_system_run_generated_script(state: State):
     for i in range(50):
         try:
             result = subprocess.run(
-                ["python3", ".tmp/generator.py", f"{seeds_folder}/{seeds_batch_id}_{i}"],
+                [
+                    "python3",
+                    ".tmp/generator.py",
+                    f"{seeds_folder}/{seeds_batch_id}_{i}",
+                ],
                 capture_output=True,
                 text=True,
-                timeout=30  # Set the timeout to 30 seconds
+                timeout=30,  # Set the timeout to 30 seconds
             )
             if result.returncode != 0:
                 print("[!] Failed to run the generated script.")
@@ -182,7 +192,6 @@ def node_system_run_generated_script(state: State):
                 "seeds_generated": False,
                 "seeds_generation_failed_reason": "The script timed out after 30 seconds.",
             }
-
 
     print(f"[+] Seeds generated successfully in {seeds_folder}")
     return {
@@ -305,9 +314,21 @@ def edge_seeds_generated(state: State):
 def edge_should_stop(state: State):
     # return state["rounds"] >= 3
     # check if we're over budget
-    print("Current cost: ", state["cb"].total_cost)
+
+    total_cost = state["cb"].total_cost
+    if total_cost == 0:
+        # this model doesn't support cost tracking, but we still have token information
+        input_price = 3 / 1_000_000  # $3 / 1M input tokens
+        input_tokens = state["cb"].prompt_tokens
+
+        output_price = 15 / 1_000_000  # $15 / 1M output tokens
+        output_tokens = state["cb"].completion_tokens
+
+        total_cost = input_tokens * input_price + output_tokens * output_price
+
+    print("Current cost: ", total_cost)
     print("Budget: ", state["budget"])
-    if state["cb"].total_cost >= state["budget"]:
+    if total_cost >= state["budget"]:
         print("We're over budget, let's stop")
         return True
     else:
@@ -321,7 +342,11 @@ def edge_should_stop(state: State):
 
 
 def start_seedgen(
-    runtime_id: str, container_id: str, project_name: str, harness_binary: str, budget: float
+    runtime_id: str,
+    container_id: str,
+    project_name: str,
+    harness_binary: str,
+    budget: float,
 ):
     # in order to connect to the SeedGen runtime service in the Docker container, we need to know the IP address of the container
     # we can use the container_id to get the IP address
@@ -337,7 +362,9 @@ def start_seedgen(
         text=True,
     ).stdout.strip()
 
-    print(f"[+] The SeedGen runtime service is running at {ip_addr}, waiting for it to be ready...")
+    print(
+        f"[+] The SeedGen runtime service is running at {ip_addr}, waiting for it to be ready..."
+    )
 
     runtime_folder = os.path.join(".tmp", runtime_id)
     shared_folder = os.path.join(runtime_folder, "shared")
@@ -349,7 +376,9 @@ def start_seedgen(
     # Start SeedGen in the Docker container
     rt = runtime.SeedGenRuntime(ip_addr)
     rt.wait_until_ready()
-    print(f"[+] SeedGen service is ready, starting the seed generation process for {project_name}/{harness_binary}")
+    print(
+        f"[+] SeedGen service is ready, starting the seed generation process for {project_name}/{harness_binary}"
+    )
 
     # Locate the harness function
     harness_loc = rt.locate(f"/out/{harness_binary}", "LLVMFuzzerTestOneInput")
