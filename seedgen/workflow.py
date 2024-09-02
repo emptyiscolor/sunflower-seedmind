@@ -54,6 +54,7 @@ class State(TypedDict):
     cb: OpenAICallbackHandler
     budget: float
     start_time: float
+    max_level: int
 
     # States
     rounds: int
@@ -63,6 +64,9 @@ class State(TypedDict):
     generated_seeds: Annotated[list[str], add]
     coverage_reports: Annotated[list[str], add]
     suggestions: Annotated[list[str], add]
+
+    # Flags
+    over_token_limit: bool
     script_generated: bool
     seeds_generated: bool
     seeds_generation_failed_reason: str
@@ -107,10 +111,25 @@ def node_agent_generation(state: State):
         HumanMessage(content=prompt),
     ]
 
-    response = model.invoke(messages)
+    try:
+        response = model.invoke(messages)
+    except Exception as e:
+        if "maximum context length" in str(e).lower():
+            new_max_level = (
+                state["max_level"] - 1 if state["max_level"] is not None else 5
+            )
+            return {
+                "max_level": new_max_level,
+                "over_token_limit": True,
+                "script_generated": False,
+            }
+        else:
+            print(f"Error invoking model: {str(e)}")
+            raise
     return {
         "rounds": state["rounds"] + 1,
         "messages": remove_commands + [response],
+        "over_token_limit": False,
     }
 
 
@@ -235,6 +254,9 @@ def node_system_evaluate_coverage(state: State):
         if func["fully_covered"]:
             continue
 
+        if state["max_level"] is not None and func["level"] > state["max_level"]:
+            continue
+
         filename, line = func["location"].split(":")
 
         shared_file = rt.share(filename)
@@ -311,6 +333,11 @@ def edge_seeds_generated(state: State):
     return state["seeds_generated"]
 
 
+def edge_over_token_limit(state: State):
+    # if we successfully generate the seeds, and go over the token limit, we should turn back and retry with a smaller context level
+    return state["over_token_limit"] and state["seeds_generated"]
+
+
 def edge_should_stop(state: State):
     # return state["rounds"] >= 3
     # check if we're over budget
@@ -347,6 +374,7 @@ def start_seedgen(
     project_name: str,
     harness_binary: str,
     budget: float,
+    max_level: int,
 ):
     # in order to connect to the SeedGen runtime service in the Docker container, we need to know the IP address of the container
     # we can use the container_id to get the IP address
@@ -406,7 +434,11 @@ def start_seedgen(
     graph.add_node("system_evaluate_coverage", node_system_evaluate_coverage)
 
     graph.add_edge(START, "agent_generation")
-    graph.add_edge("agent_generation", "system_fetch_code")
+    graph.add_conditional_edges(
+        "agent_generation",
+        edge_over_token_limit,
+        {True: "system_evaluate_coverage", False: "system_fetch_code"},
+    )
     graph.add_conditional_edges(
         "system_fetch_code",
         edge_script_generated,
@@ -430,6 +462,7 @@ def start_seedgen(
         "harness_binary": harness_binary,
         "shared_folder": shared_folder,
         "seeds_folder": seeds_folder,
+        "max_level": max_level,
         "rt": rt,
         "rounds": 0,
         "start_time": time.time(),

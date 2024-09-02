@@ -31,8 +31,8 @@ def parse_args():
     parser.add_argument(
         "--level",
         type=int,
-        default=0,
-        help="Maximum level of the callgraph to be generated, 0 means no limit",
+        default=5,
+        help="Maximum level of the callgraph to be generated, default is 5",
     )
     parser.add_argument(
         "--budget",
@@ -249,6 +249,7 @@ def main():
     harness_binaries = args.harness_binaries
     budget = args.budget
     root = args.root
+    max_level = args.level
 
     try:
         project_yaml_path = validate_environment(root, project_name)
@@ -257,7 +258,7 @@ def main():
         runtime_id, container_id = run_project(root, project_name, project_config)
         for harness_binary in harness_binaries:
             workflow.start_seedgen(
-                runtime_id, container_id, project_name, harness_binary, budget
+                runtime_id, container_id, project_name, harness_binary, budget, max_level
             )
     except (FileNotFoundError, ValueError) as e:
         print(f"[-] Error: {e}", file=sys.stderr)
