@@ -70,3 +70,5 @@ while IFS= read -r harness; do
     find  oss-fuzz/build/corpus/seedgen -type f -size +2M -delete
 
 done < "$TO_GENERATED_FILE"
+
+wait < <(jobs -p)
