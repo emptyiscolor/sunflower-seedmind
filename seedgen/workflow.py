@@ -252,6 +252,7 @@ def node_system_evaluate_coverage(state: State):
 
     for func in coverage_info:
         if func["fully_covered"]:
+            print(f"[+] Function {func['name']} is fully covered")
             continue
 
         if state["max_level"] is not None and func["level"] > state["max_level"]:
@@ -274,6 +275,8 @@ def node_system_evaluate_coverage(state: State):
 
         name = func["name"]
         coverages = f"Coverage (covered edges / total edges): {func['covered_edges']}/{func['total_edges']}"
+
+        print(f"[+] Function {name} {coverages}")
 
         prompt = f"Function Information:\n" f"Name: {name}\n" f"{coverages}\n"
 
