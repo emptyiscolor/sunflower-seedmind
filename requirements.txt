@@ -1,0 +1,11 @@
+langgraph
+langchain-openai
+langchain-anthropic
+langchain_community
+libclang
+grpcio
+grpcio-tools
+grpcio-health-checking
+grpcio-reflection
+grpcio-status
+networkx

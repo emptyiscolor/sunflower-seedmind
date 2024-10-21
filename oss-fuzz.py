@@ -152,11 +152,10 @@ def run_project(root, project_name, project_config) -> tuple[str, str]:
         "FUZZING_LANGUAGE": project_config["language"],
         "CC": "/clang-argus",
         "CXX": "/clang-argus++",
+        "ADD_RUNTIME": "1",
         "BANDFUZZ_RUNTIME": "libcallgraph_rt.a",  # linking runtime to the target
-        "BANDFUZZ_FUNCINSTR": "1",  # enable function-level instrumentation
-        "BANDFUZZ_NATIVESANCOV": "1",  # disable loading our customized sancov.pass
-        "DRIVER_PASSTHROUGH": "1",  # disable driver replacement
         "BANDFUZZ_OPT": "0",  # disable optimization (-O0)
+        "ADD_ADDITIONAL_PASSES": "FineIWillDoItMyselfPass.so",
     }
     environment_commands = list(
         itertools.chain.from_iterable(
