@@ -17,6 +17,11 @@ cd $SCRIPT_DIR/../argus
 cargo build --release
 cp target/release/argus $SCRIPT_DIR/../prebuilt/argus
 
+# getcov
+cd $SCRIPT_DIR/../getcov
+cargo build --release
+cp target/release/getcov $SCRIPT_DIR/../prebuilt/getcov
+
 # callgraph_rt
 cd $SCRIPT_DIR/../callgraph_rt
 cargo build --release

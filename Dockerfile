@@ -6,6 +6,7 @@ ENV PATH="/usr/local/go/bin:/root/.cargo/bin:${PATH}"
 WORKDIR /app
 COPY FineIWillDoItMyselfPass/ /app/FineIWillDoItMyselfPass/
 COPY argus/ /app/argus/
+COPY getcov/ /app/getcov/
 COPY callgraph_rt/ /app/callgraph_rt/
 COPY seedgen-injected/ /app/seedgen-injected/
 CMD ["bash", "-c", "/app/prebuilt/build.sh"]
