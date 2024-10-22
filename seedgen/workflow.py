@@ -38,7 +38,7 @@ import shutil
 # )
 
 model = ChatOpenAI(
-    model="claude-3-5-sonnet-20240620",
+    model="o1-mini",
     api_key="sk-whexy",
     base_url="https://litellm.mudd.cc",
 )
@@ -105,9 +105,10 @@ def node_agent_generation(state: State):
         os.path.join(state["shared_folder"], f"prompt_{state['rounds'] + 1}.txt"), "w"
     ) as f:
         f.write(prompt)
-
+    
+    # Some model doesn't support system message (e.g., o1-mini), so we add the system message prompt to the beginning of the user prompt
+    prompt = SEEDGEN_SYSTEM_PROMPT + "\n\n" + prompt
     messages = [
-        SystemMessage(content=SEEDGEN_SYSTEM_PROMPT),
         HumanMessage(content=prompt),
     ]
 

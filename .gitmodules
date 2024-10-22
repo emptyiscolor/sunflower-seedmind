@@ -4,3 +4,6 @@
 [submodule "oss-fuzz"]
 	path = oss-fuzz
 	url = https://github.com/google/oss-fuzz.git
+[submodule "getcov"]
+	path = getcov
+	url = https://github.com/whexy/getcov
