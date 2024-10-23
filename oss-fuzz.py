@@ -100,16 +100,16 @@ def compile_project(root, project_name, project_config):
         raise FileNotFoundError("Docker not found on the host machine")
 
     project_dir = os.path.join(".tmp", project_name)
+    os.makedirs(project_dir, exist_ok=True)
+    os.makedirs(os.path.join(project_dir, "shared"), exist_ok=True)
 
     # check if project_dir/out exists, if so, we don't need to compile the project again
     if os.path.exists(os.path.join(project_dir, "out")):
         print(f"[*] Project '{project_name}' already compiled, skipping")
         return
 
-    os.makedirs(project_dir, exist_ok=True)
-    os.makedirs(os.path.join(project_dir, "out"), exist_ok=True)
-    os.makedirs(os.path.join(project_dir, "work"), exist_ok=True)
-    os.makedirs(os.path.join(project_dir, "shared"), exist_ok=True)
+    os.makedirs(os.path.join(project_dir, "out"))
+    os.makedirs(os.path.join(project_dir, "work"))
 
     project_dir = os.path.abspath(project_dir)
     print(f"[+] Project directory: {project_dir}")
@@ -150,6 +150,7 @@ def compile_project(root, project_name, project_config):
         "BANDFUZZ_RUNTIME": "libcallgraph_rt.a",  # linking runtime to the target
         "BANDFUZZ_OPT": "0",  # disable optimization (-O0)
         "ADD_ADDITIONAL_PASSES": "FineIWillDoItMyselfPass.so",
+        "BANDFUZZ_PROFILE": "1",
     }
     environment_commands = list(
         itertools.chain.from_iterable(
@@ -169,7 +170,12 @@ def compile_project(root, project_name, project_config):
         + environment_commands
         + [docker_image_name]
     )
-    subprocess.run(run_command, check=True, stdout=subprocess.PIPE)
+    process = subprocess.Popen(run_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    for line in process.stdout:
+        print(line, end='')
+    process.wait()
+    if process.returncode != 0:
+        raise subprocess.CalledProcessError(process.returncode, run_command)
 
 # Start the daemon in container
 
@@ -189,12 +195,9 @@ def start_daemon(root, project_name, project_config) -> tuple[str, str]:
         "/out": f"{project_dir}/out",
         "/work": f"{project_dir}/work",
         "/shared": f"{project_dir}/shared",
-        "/clang-argus": get_prebuilt_binary_path("argus"),
-        "/clang-argus++": get_prebuilt_binary_path("argus"),
-        "/libcallgraph_rt.a": get_prebuilt_binary_path("libcallgraph_rt.a"),
         "/FineIWillDoItMyselfPass.so": get_prebuilt_binary_path("FineIWillDoItMyselfPass.so"),
         "/seedgen-injected": get_prebuilt_binary_path("seedgen-injected"),
-        "/seedgen.sh": get_prebuilt_binary_path("seedgen.sh"),
+        "/getcov": get_prebuilt_binary_path("getcov"),
     }
     mount_commands = list(
         itertools.chain.from_iterable(
