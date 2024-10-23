@@ -179,7 +179,7 @@ def node_system_fetch_code(state: State):
 # Run the generated script to generate the seeds.
 def node_system_run_generated_script(state: State):
     generated_script = state["generated_scripts"][-1]
-    with open(".tmp/generator.py", "w") as f:
+    with open(f".tmp/generator_{state['rounds']}.py", "w") as f:
         f.write(generated_script)
     # Run the generated script
     seeds_folder = state["seeds_folder"]
@@ -192,7 +192,7 @@ def node_system_run_generated_script(state: State):
             result = subprocess.run(
                 [
                     "python3",
-                    ".tmp/generator.py",
+                    f".tmp/generator_{state['rounds']}.py",
                     f"{seeds_folder}/{seeds_batch_id}_{i}",
                 ],
                 capture_output=True,

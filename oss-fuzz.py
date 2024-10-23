@@ -6,7 +6,6 @@ import itertools
 import os
 import sys
 import argparse
-import uuid
 import yaml
 import subprocess
 
@@ -14,8 +13,10 @@ from seedgen import source, workflow
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Run SeedGen on an OSS-Fuzz project")
-    parser.add_argument("project_name", type=str, help="Name of the OSS-Fuzz project")
+    parser = argparse.ArgumentParser(
+        description="Run SeedGen on an OSS-Fuzz project")
+    parser.add_argument("project_name", type=str,
+                        help="Name of the OSS-Fuzz project")
     parser.add_argument(
         "harness_binaries",
         type=str,
@@ -89,37 +90,31 @@ def print_project_info(project_name, project_config):
     print("=" * 50 + "\n")
 
 
-def run_project(root, project_name, project_config) -> tuple[str, str]:
-    # For an OSS-Fuzz project, we need to compile the project in the OSS-Fuzz environment, which is a Docker container
-
-    # First, we need to build the Docker image for the project
-    # The Dockerfile for the project is present in the project directory
-    # We can use the `docker build` command to build the Docker image
-
-    dockerfile_path = os.path.join(root, "projects", project_name, "Dockerfile")
+# Compile the project, the artifacts will be stored in .tmp/<project_name>/out
+def compile_project(root, project_name, project_config):
+    dockerfile_path = os.path.join(
+        root, "projects", project_name, "Dockerfile")
     if not os.path.exists(dockerfile_path):
         raise FileNotFoundError("Dockerfile not found in project directory")
-    # Ensure the Docker daemon is running, and docker is installed on the host machine
     if subprocess.run(["docker", "--version"]).returncode != 0:
         raise FileNotFoundError("Docker not found on the host machine")
 
-    # Assign a runtime id for this run, use UUID
-    runtime_id = str(uuid.uuid4())
-    print(f"[+] Runtime ID: {runtime_id}")
+    project_dir = os.path.join(".tmp", project_name)
 
-    # In the temporary directory, create a new directory for this run, with the runtime id, and create `out` and `work` directories
-    temp_dir = os.path.join(".tmp", runtime_id)
-    os.makedirs(temp_dir, exist_ok=True)
-    os.makedirs(os.path.join(temp_dir, "out"), exist_ok=True)
-    os.makedirs(os.path.join(temp_dir, "work"), exist_ok=True)
-    os.makedirs(os.path.join(temp_dir, "shared"), exist_ok=True)
+    # check if project_dir/out exists, if so, we don't need to compile the project again
+    if os.path.exists(os.path.join(project_dir, "out")):
+        print(f"[*] Project '{project_name}' already compiled, skipping")
+        return
 
-    # get absolute path of the temp directory
-    temp_dir = os.path.abspath(temp_dir)
-    print(f"[+] Temporary directory: {temp_dir}")
+    os.makedirs(project_dir, exist_ok=True)
+    os.makedirs(os.path.join(project_dir, "out"), exist_ok=True)
+    os.makedirs(os.path.join(project_dir, "work"), exist_ok=True)
+    os.makedirs(os.path.join(project_dir, "shared"), exist_ok=True)
 
-    # Build the Docker image for the project
-    docker_image_name = f"oss-fuzz-{project_name}"
+    project_dir = os.path.abspath(project_dir)
+    print(f"[+] Project directory: {project_dir}")
+
+    docker_image_name = f"oss-fuzz-build-{project_name}"
     build_command = [
         "docker",
         "build",
@@ -127,20 +122,79 @@ def run_project(root, project_name, project_config) -> tuple[str, str]:
         docker_image_name,
         ".",
     ]
-    subprocess.run(build_command, check=True, cwd=os.path.dirname(dockerfile_path))
+    subprocess.run(build_command, check=True,
+                   cwd=os.path.dirname(dockerfile_path))
 
     # Run the Docker container with the project image
     # Mount the `out` and `work` directories to the temporary directory
     mount_configs = {
-        "/out": f"{temp_dir}/out",
-        "/work": f"{temp_dir}/work",
-        "/shared": f"{temp_dir}/shared",
-        "/clang-argus": get_argus_binary_path(),
-        "/clang-argus++": get_argus_binary_path(),
-        "/libcallgraph_rt.a": get_tinyrt_object_path(),
-        "/FineIWillDoItMyselfPass.so": get_function_call_pass_path(),
-        "/seedgen-injected": get_injected_runtime_path(),
-        "/seedgen.sh": get_entrypoint_path(),
+        "/out": f"{project_dir}/out",
+        "/work": f"{project_dir}/work",
+        "/shared": f"{project_dir}/shared",
+        "/clang-argus": get_prebuilt_binary_path("argus"),
+        "/clang-argus++": get_prebuilt_binary_path("argus"),
+        "/libcallgraph_rt.a": get_prebuilt_binary_path("libcallgraph_rt.a"),
+        "/FineIWillDoItMyselfPass.so": get_prebuilt_binary_path("FineIWillDoItMyselfPass.so"),
+    }
+    mount_commands = list(
+        itertools.chain.from_iterable(
+            ("-v", f"{src}:{dest}") for dest, src in mount_configs.items()
+        )
+    )
+    # Setup the environment variables
+    environment_configs = {
+        "FUZZING_LANGUAGE": project_config["language"],
+        "CC": "/clang-argus",
+        "CXX": "/clang-argus++",
+        "ADD_RUNTIME": "1",
+        "BANDFUZZ_RUNTIME": "libcallgraph_rt.a",  # linking runtime to the target
+        "BANDFUZZ_OPT": "0",  # disable optimization (-O0)
+        "ADD_ADDITIONAL_PASSES": "FineIWillDoItMyselfPass.so",
+    }
+    environment_commands = list(
+        itertools.chain.from_iterable(
+            ("-e", f"{key}={value}") for key, value in environment_configs.items()
+        )
+    )
+
+    run_command = (
+        [
+            "docker",
+            "run",
+            "--privileged",
+            "--shm-size=2g",
+            "--entrypoint=compile",
+        ]
+        + mount_commands
+        + environment_commands
+        + [docker_image_name]
+    )
+    subprocess.run(run_command, check=True, stdout=subprocess.PIPE)
+
+# Start the daemon in container
+
+
+def start_daemon(root, project_name, project_config) -> tuple[str, str]:
+    project_dir = os.path.abspath(os.path.join(".tmp", project_name))
+
+    # double check if project_dir/out exists, if not, the project is not compiled
+    if not os.path.exists(os.path.join(project_dir, "out")):
+        raise FileNotFoundError(f"Project '{project_name}' not compiled")
+
+    docker_image_name = f"oss-fuzz-build-{project_name}"
+
+    # Run the Docker container with the project image
+    # Mount the `out` and `work` directories to the temporary directory
+    mount_configs = {
+        "/out": f"{project_dir}/out",
+        "/work": f"{project_dir}/work",
+        "/shared": f"{project_dir}/shared",
+        "/clang-argus": get_prebuilt_binary_path("argus"),
+        "/clang-argus++": get_prebuilt_binary_path("argus"),
+        "/libcallgraph_rt.a": get_prebuilt_binary_path("libcallgraph_rt.a"),
+        "/FineIWillDoItMyselfPass.so": get_prebuilt_binary_path("FineIWillDoItMyselfPass.so"),
+        "/seedgen-injected": get_prebuilt_binary_path("seedgen-injected"),
+        "/seedgen.sh": get_prebuilt_binary_path("seedgen.sh"),
     }
     mount_commands = list(
         itertools.chain.from_iterable(
@@ -170,7 +224,7 @@ def run_project(root, project_name, project_config) -> tuple[str, str]:
             "-d",
             "--privileged",
             "--shm-size=2g",
-            "--entrypoint=/seedgen.sh",
+            "--entrypoint=/seedgen-injected",
         ]
         + mount_commands
         + environment_commands
@@ -178,68 +232,16 @@ def run_project(root, project_name, project_config) -> tuple[str, str]:
     )
     result = subprocess.run(run_command, check=True, stdout=subprocess.PIPE)
     container_id = result.stdout.decode().strip()
-
-    # Impossible to do this check here because we change to one-container mode recently
-    # Check if the harness binary is present in the `out` directory
-    # harness_binary_path = os.path.join(temp_dir, "out", harness_binary)
-    # if not os.path.exists(harness_binary_path):
-    #     raise FileNotFoundError(
-    #         f"Harness binary '{harness_binary}' not found in the 'out' directory"
-    #     )
-
-    return runtime_id, container_id
+    return project_name, container_id
 
 
-def get_argus_binary_path():
-    # Argus is a compiler wrapper, it should exists in the same directory as this script
-    argus_binary_path = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "prebuilt", "argus"
+def get_prebuilt_binary_path(binary_name):
+    binary_path = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "prebuilt", binary_name
     )
-    if not os.path.exists(argus_binary_path):
-        raise FileNotFoundError("Argus binary not found")
-    return argus_binary_path
-
-
-def get_tinyrt_object_path():
-    # TinyRT is a runtime library, it should exists in the same directory as this script
-    tinyrt_binary_path = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "prebuilt", "libcallgraph_rt.a"
-    )
-    if not os.path.exists(tinyrt_binary_path):
-        raise FileNotFoundError("TinyRT binary not found")
-    return tinyrt_binary_path
-
-
-def get_function_call_pass_path():
-    # FunctionCall is a pass (fine_i_will_do_it_myself_pass), which call a function to record the function call relationship at the beginning of each function
-    function_call_pass_path = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)),
-        "prebuilt",
-        "FineIWillDoItMyselfPass.so",
-    )
-    if not os.path.exists(function_call_pass_path):
-        raise FileNotFoundError("Function Call pass not found")
-    return function_call_pass_path
-
-
-def get_injected_runtime_path():
-    # Argus is a compiler wrapper, it should exists in the same directory as this script
-    injected_binary_path = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "prebuilt", "seedgen-injected"
-    )
-    if not os.path.exists(injected_binary_path):
-        raise FileNotFoundError("Injected-Runtime binary not found")
-    return injected_binary_path
-
-
-def get_entrypoint_path():
-    # Argus is a compiler wrapper, it should exists in the same directory as this script
-    entrypoint_script_path = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "prebuilt", "seedgen.sh"
-    )
-    if not os.path.exists(entrypoint_script_path):
-        raise FileNotFoundError("Entrypoint script not found")
-    return entrypoint_script_path
+    if not os.path.exists(binary_path):
+        raise FileNotFoundError(f"{binary_name} not found")
+    return binary_path
 
 
 def main():
@@ -254,7 +256,15 @@ def main():
         project_yaml_path = validate_environment(root, project_name)
         project_config = load_project_config(project_yaml_path)
         print_project_info(project_name, project_config)
-        runtime_id, container_id = run_project(root, project_name, project_config)
+
+        # Compile the project
+        compile_project(root, project_name, project_config)
+
+        # Start the daemon
+        runtime_id, container_id = start_daemon(
+            root, project_name, project_config)
+
+        # Start the agent
         for harness_binary in harness_binaries:
             workflow.start_seedgen(
                 runtime_id, container_id, project_name, harness_binary, budget, max_level
@@ -269,6 +279,7 @@ def main():
 
 if __name__ == "__main__":
     os.makedirs(".tmp", exist_ok=True)
-    LIBCLANG_PATH = "/usr/lib/llvm-18/lib/libclang.so"  # Path to libclang.so, run the script in dev container!
+    # Path to libclang.so, run the script in dev container!
+    LIBCLANG_PATH = "/usr/lib/llvm-18/lib/libclang.so"
     source.set_libclang_path(LIBCLANG_PATH)
     main()
