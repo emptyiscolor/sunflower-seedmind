@@ -3,7 +3,8 @@ import subprocess
 import os
 import time
 import uuid
-
+import dotenv
+dotenv.load_dotenv('myenv.env')
 from langchain_core.messages import (
     AnyMessage,
     HumanMessage,
@@ -37,12 +38,15 @@ import shutil
 #     model="gpt-4o-mini", api_key="sk-whexy", base_url="https://litellm.mudd.cc"
 # )
 
-model = ChatOpenAI(
-    model="o1-mini",
-    api_key="sk-whexy",
-    base_url="https://litellm.mudd.cc",
-)
+# model = ChatOpenAI(
+#     model="o1-mini",
+#     api_key="sk-whexy",
+#     base_url="https://litellm.mudd.cc",
+# )
 
+model = ChatOpenAI(
+    model="gpt-4o"
+)
 
 # Define the state.
 class State(TypedDict):

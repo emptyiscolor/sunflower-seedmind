@@ -105,3 +105,6 @@ prebuilt/libcallgraph_rt.a
 prebuilt/seedgen-injected
 
 .tmp/
+my.env
+.vscode/launch.json
+oss-fuzz
