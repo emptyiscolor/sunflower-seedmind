@@ -1,5 +1,8 @@
 import re
 import networkx as nx
+import matplotlib.pyplot as plt
+
+num = 0
 
 def is_stl_function(func_name):
     stl_patterns = [
@@ -83,4 +86,31 @@ def process_call_graph(log_file_path):
     
     initial_nodes = ['LLVMFuzzerTestOneInput']
     levels = assign_levels(G, initial_nodes)
+    
+    # Visualize the call graph
+    visualize_call_tree(G, levels)
     return levels
+
+def visualize_call_tree(G, levels):
+    # Define a color map and position the nodes by their level, skipping nodes with inf levels
+    color_map = []
+    pos = {}
+
+    for node in G.nodes:
+        level = levels.get(node, float('inf'))
+        
+        if level == float('inf'):
+            continue  # Skip nodes with inf levels
+        elif level == 0:
+            color_map.append('red')  # Entry points (root nodes)
+        else:
+            color_map.append('lightblue')  # Other nodes
+        pos[node] = (level, -list(G.nodes).index(node))
+
+    # Draw the graph with filtered nodes and positions
+    plt.figure(figsize=(12, 8))
+    nx.draw(G, pos, with_labels=True, node_color=color_map, node_size=500, font_size=10, font_weight='bold', edge_color='grey', arrows=True)
+    
+    plt.title("Filtered Call Tree")
+    plt.savefig(f"/workspaces/SeedGen/.tmp/callgraph_{num}.png")
+    num += 1

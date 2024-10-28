@@ -4,7 +4,7 @@ import os
 import time
 import uuid
 import dotenv
-dotenv.load_dotenv('myenv.env')
+dotenv.load_dotenv('/workspaces/SeedGen/my.env')
 from langchain_core.messages import (
     AnyMessage,
     HumanMessage,
