@@ -413,7 +413,7 @@ def start_seedgen(
     visualization_folder = os.path.join(runtime_folder, "visualization")
 
     # Delete existing folders and recreate them
-    for folder in [shared_folder, generator_folder, visualization_folder]:
+    for folder in [generator_folder, visualization_folder]:
         shutil.rmtree(folder, ignore_errors=True)
         os.makedirs(folder)
 

@@ -282,6 +282,7 @@ def main():
 
 if __name__ == "__main__":
     os.makedirs(".tmp", exist_ok=True)
+    os.system(f"rm -rf /workspaces/SeedGen/.tmp/libxml2/shared")
     # Path to libclang.so, run the script in dev container!
     LIBCLANG_PATH = "/usr/lib/llvm-18/lib/libclang.so"
     source.set_libclang_path(LIBCLANG_PATH)
