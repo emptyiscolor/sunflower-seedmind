@@ -51,6 +51,7 @@ model = ChatOpenAI(
 # Define the state.
 class State(TypedDict):
     # Predefined
+    runtime_folder: str
     harness_binary: str
     shared_folder: str
     seeds_folder: str
@@ -183,7 +184,7 @@ def node_system_fetch_code(state: State):
 # Run the generated script to generate the seeds.
 def node_system_run_generated_script(state: State):
     generated_script = state["generated_scripts"][-1]
-    with open(f".tmp/generator_{state['rounds']}.py", "w") as f:
+    with open(f"{state['runtime_folder']}/generator/generator_{state['rounds']}.py", "w") as f:
         f.write(generated_script)
     # Run the generated script
     seeds_folder = state["seeds_folder"]
@@ -196,7 +197,7 @@ def node_system_run_generated_script(state: State):
             result = subprocess.run(
                 [
                     "python3",
-                    f".tmp/generator_{state['rounds']}.py",
+                    f"{state['runtime_folder']}/generator/generator_{state['rounds']}.py",
                     f"{seeds_folder}/{seeds_batch_id}_{i}",
                 ],
                 capture_output=True,
@@ -254,10 +255,12 @@ def node_system_evaluate_coverage(state: State):
     coverage_info = coverage.parse_libfuzzer_log(coverage_report, levels)
 
     summary = []
-
+    callgraph.visualize_call_tree(report_file, coverage_info, state['rounds'], state['runtime_folder'])
+    sum_covered_edges = 0
     for func in coverage_info:
+        sum_covered_edges += func['covered_edges']
         if func["fully_covered"]:
-            print(f"[+] Function {func['name']} is fully covered")
+            # print(f"[+] Function {func['name']} is fully covered")
             continue
 
         if state["max_level"] is not None and func["level"] > state["max_level"]:
@@ -280,8 +283,7 @@ def node_system_evaluate_coverage(state: State):
 
         name = func["name"]
         coverages = f"Coverage (covered edges / total edges): {func['covered_edges']}/{func['total_edges']}"
-
-        print(f"[+] Function {name} {coverages}")
+        # print(f"[+] Function {name} {coverages}")
 
         prompt = f"Function Information:\n" f"Name: {name}\n" f"{coverages}\n"
 
@@ -312,6 +314,7 @@ def node_system_evaluate_coverage(state: State):
             else:
                 summary.append(f"[       ]\t{content}")
 
+    print(f"[+] Sum of covered edges: {sum_covered_edges}")
     return {
         "coverage_reports": ["\n".join(summary)],
     }
@@ -405,10 +408,19 @@ def start_seedgen(
     runtime_folder = os.path.join(".tmp", runtime_id)
     shared_folder = os.path.join(runtime_folder, "shared")
 
+    # Create folders
+    generator_folder = os.path.join(runtime_folder, "generator")
+    visualization_folder = os.path.join(runtime_folder, "visualization")
+
+    # Delete existing folders and recreate them
+    for folder in [shared_folder, generator_folder, visualization_folder]:
+        shutil.rmtree(folder, ignore_errors=True)
+        os.makedirs(folder)
+
     # Create a /seeds directory in the shared folder
     seeds_folder = os.path.join(shared_folder, "seeds")
     os.makedirs(seeds_folder, exist_ok=True)
-
+    
     # Start SeedGen in the Docker container
     rt = runtime.SeedGenRuntime(ip_addr)
     rt.wait_until_ready()
@@ -467,6 +479,7 @@ def start_seedgen(
     print(app.get_graph().draw_mermaid())
 
     initial_state = {
+        "runtime_folder": runtime_folder,
         "harness_binary": harness_binary,
         "shared_folder": shared_folder,
         "seeds_folder": seeds_folder,

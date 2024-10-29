@@ -2,7 +2,6 @@ import re
 import networkx as nx
 import matplotlib.pyplot as plt
 
-num = 0
 
 def is_stl_function(func_name):
     stl_patterns = [
@@ -87,30 +86,67 @@ def process_call_graph(log_file_path):
     initial_nodes = ['LLVMFuzzerTestOneInput']
     levels = assign_levels(G, initial_nodes)
     
-    # Visualize the call graph
-    visualize_call_tree(G, levels)
     return levels
 
-def visualize_call_tree(G, levels):
-    # Define a color map and position the nodes by their level, skipping nodes with inf levels
-    color_map = []
-    pos = {}
+def visualize_call_tree(log_file_path, coverage_info, num, runtime_folder):
+    calls = parse_log(log_file_path)
+    filtered_calls = filter_calls(calls)
 
+    G = nx.DiGraph()
+    added_edges = set()
+    for callee, caller in filtered_calls:
+        if callee == caller:
+            continue
+        if (caller, callee) not in added_edges:
+            G.add_edge(caller, callee)
+            added_edges.add((caller, callee))
+    
+    initial_nodes = ['LLVMFuzzerTestOneInput']
+    levels = assign_levels(G, initial_nodes)
+    # Convert coverage_info into a dictionary for fast lookup by function name
+    coverage_dict = {func['name']: func for func in coverage_info}
+
+    # Create a temporary graph with only valid nodes
+    tmp_G = nx.DiGraph()
     for node in G.nodes:
         level = levels.get(node, float('inf'))
-        
-        if level == float('inf'):
-            continue  # Skip nodes with inf levels
-        elif level == 0:
-            color_map.append('red')  # Entry points (root nodes)
-        else:
-            color_map.append('lightblue')  # Other nodes
-        pos[node] = (level, -list(G.nodes).index(node))
-
-    # Draw the graph with filtered nodes and positions
-    plt.figure(figsize=(12, 8))
-    nx.draw(G, pos, with_labels=True, node_color=color_map, node_size=500, font_size=10, font_weight='bold', edge_color='grey', arrows=True)
+        if level != float('inf'):
+            tmp_G.add_node(node)
+            for neighbor in G.neighbors(node):
+                if levels.get(neighbor, float('inf')) != float('inf'):
+                    tmp_G.add_edge(node, neighbor)
     
-    plt.title("Filtered Call Tree")
-    plt.savefig(f"/workspaces/SeedGen/.tmp/callgraph_{num}.png")
+    # Define color map, position, and labels for each node based on coverage info
+    color_map = []
+    pos = {}
+    labels = {}
+
+    for node in tmp_G.nodes:
+        level = levels[node]
+        
+        # Get the coverage information for the node if available
+        coverage = coverage_dict.get(node, None)
+        if coverage:
+            coverage_text = f"{coverage['covered_edges']}/{coverage['total_edges']}"
+            labels[node] = f"{node}\n{coverage_text}"
+            # Set node color based on coverage
+            if coverage['fully_covered']:
+                color_map.append('yellow')  # Fully covered nodes
+            elif level == 0:
+                color_map.append('red')  # Entry points (root nodes)
+            else:
+                color_map.append('lightblue')  # Partially covered nodes
+        else:
+            labels[node] = node
+            color_map.append('grey')  # Nodes without coverage info
+
+        # Position nodes by their level
+        pos[node] = (level, -list(tmp_G.nodes).index(node))
+
+    # Draw the graph with positions and labels
+    plt.figure(figsize=(12, 8))
+    nx.draw(tmp_G, pos, with_labels=True, node_color=color_map, node_size=500, font_size=10, font_weight='bold', edge_color='grey', arrows=True, labels=labels)
+    
+    plt.title("Filtered Call Tree with Coverage Information")
+    plt.savefig(f"{runtime_folder}/visualization/callgraph_{num}.png")
     num += 1

@@ -38,8 +38,8 @@ def parse_args():
     parser.add_argument(
         "--budget",
         type=float,
-        default=2,
-        help="Maximum budget of LLM usages, default is $0.1",
+        default=1,
+        help="Maximum budget of LLM usages, default is $1",
     )
     return parser.parse_args()
 
