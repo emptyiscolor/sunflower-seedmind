@@ -49,6 +49,17 @@ model = ChatOpenAI(
     model="gpt-4o"
 )
 
+
+# the branch of prioritized branches in the call graph
+class Branch(TypedDict):
+    sub_branches: nx.DiGraph
+    name: str
+    func_coverage_before: list[dict]
+    generator_scripts: list[str]
+    coverage_reports: list[str]
+    prompt: str
+    increase_coverage: bool
+
 # Define the state.
 class State(TypedDict):
     # Predefined
@@ -78,17 +89,9 @@ class State(TypedDict):
     seeds_generation_failed_reason: str
     coverage_generated: bool
     suggestions_generated: bool
-
-# the branch of prioritized branches in the call graph
-class Branch(TypedDict):
-    sub_branches: nx.DiGraph
-    name: str
-    func_coverage_before: list[dict]
-    generator_scripts: list[str]
-    coverage_reports: list[str]
-    prompt: str
-    increase_coverage: bool
-
+    
+    # for prioritized branches
+    candidate_branches: list[Branch]
 
 # Define the nodes
 # We use a naming convention to make it easier to understand the code.
@@ -510,6 +513,7 @@ def start_seedgen(
         "seeds_generated": False,
         "coverage_generated": False,
         "suggestions_generated": False,
+        "candidate_branches": [],
     }
 
     os.makedirs(

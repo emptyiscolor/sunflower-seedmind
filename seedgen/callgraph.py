@@ -88,19 +88,21 @@ def process_call_graph(log_file_path):
     
     return levels, G
 
-def visualize_call_tree(levels, G, coverage_info, num, runtime_folder):
-    # Convert coverage_info into a dictionary for fast lookup by function name
-    coverage_dict = {func['name']: func for func in coverage_info}
-
-    # Create a temporary graph with only valid nodes
+def valid_nodes(levels, G):
     tmp_G = nx.DiGraph()
     for node in G.nodes:
-        level = levels.get(node, float('inf'))
-        if level != float('inf'):
+        if levels.get(node, float('inf')) != float('inf'):
             tmp_G.add_node(node)
             for neighbor in G.neighbors(node):
                 if levels.get(neighbor, float('inf')) != float('inf'):
                     tmp_G.add_edge(node, neighbor)
+    return tmp_G
+
+def visualize_call_tree(levels, G, coverage_info, num, runtime_folder):
+    # Convert coverage_info into a dictionary for fast lookup by function name
+    coverage_dict = {func['name']: func for func in coverage_info}
+
+    tmp_G = valid_nodes(levels, G)
     
     # Define color map, position, and labels for each node based on coverage info
     color_map = []
@@ -136,5 +138,31 @@ def visualize_call_tree(levels, G, coverage_info, num, runtime_folder):
     plt.title("Filtered Call Tree with Coverage Information")
     plt.savefig(f"{runtime_folder}/visualization/callgraph_{num}.png")
 
-def select_candidate_branches(levels, G, coverage_info):
-    pass
+def select_candidate_branches(levels, G, coverage_info, candidate_branches, k):
+    # Convert coverage_info into a dictionary for fast lookup by function name
+    coverage_dict = {func['name']: func for func in coverage_info}
+    
+    tmp_G = valid_nodes(levels, G)
+
+    # Traverse from level 0 to k to find candidate branches with uncovered edges
+    for node in tmp_G.nodes:
+        level = levels.get(node, float('inf'))
+        if level == 0:  # Start from level 0 nodes
+            # Check if this node or any of its k-level callees have uncovered edges
+            candidate_branch = [node]
+            branch_has_uncovered = False
+
+            # Traverse up to k levels of neighbors
+            for depth in range(1, k + 1):
+                for callee in nx.descendants_at_distance(tmp_G, node, depth):
+                    callee_coverage = coverage_dict.get(callee)
+                    if callee_coverage and callee_coverage['covered_edges'] < callee_coverage['total_edges']:
+                        branch_has_uncovered = True
+                        if callee not in candidate_branch:
+                            candidate_branch.append(callee)
+
+            # Only add to candidate branches if there's an uncovered edge
+            if branch_has_uncovered:
+                candidate_branches.append(candidate_branch)
+    
+    return candidate_branches
