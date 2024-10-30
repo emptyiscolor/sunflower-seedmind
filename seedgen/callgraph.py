@@ -86,23 +86,9 @@ def process_call_graph(log_file_path):
     initial_nodes = ['LLVMFuzzerTestOneInput']
     levels = assign_levels(G, initial_nodes)
     
-    return levels
+    return levels, G
 
-def visualize_call_tree(log_file_path, coverage_info, num, runtime_folder):
-    calls = parse_log(log_file_path)
-    filtered_calls = filter_calls(calls)
-
-    G = nx.DiGraph()
-    added_edges = set()
-    for callee, caller in filtered_calls:
-        if callee == caller:
-            continue
-        if (caller, callee) not in added_edges:
-            G.add_edge(caller, callee)
-            added_edges.add((caller, callee))
-    
-    initial_nodes = ['LLVMFuzzerTestOneInput']
-    levels = assign_levels(G, initial_nodes)
+def visualize_call_tree(levels, G, coverage_info, num, runtime_folder):
     # Convert coverage_info into a dictionary for fast lookup by function name
     coverage_dict = {func['name']: func for func in coverage_info}
 
@@ -149,4 +135,6 @@ def visualize_call_tree(log_file_path, coverage_info, num, runtime_folder):
     
     plt.title("Filtered Call Tree with Coverage Information")
     plt.savefig(f"{runtime_folder}/visualization/callgraph_{num}.png")
-    num += 1
+
+def select_candidate_branches(levels, G, coverage_info):
+    pass

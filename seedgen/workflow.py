@@ -1,5 +1,6 @@
 import json
 import subprocess
+import networkx as nx
 import os
 import time
 import uuid
@@ -77,6 +78,16 @@ class State(TypedDict):
     seeds_generation_failed_reason: str
     coverage_generated: bool
     suggestions_generated: bool
+
+# the branch of prioritized branches in the call graph
+class Branch(TypedDict):
+    sub_branches: nx.DiGraph
+    name: str
+    func_coverage_before: list[dict]
+    generator_scripts: list[str]
+    coverage_reports: list[str]
+    prompt: str
+    increase_coverage: bool
 
 
 # Define the nodes
@@ -242,7 +253,7 @@ def node_system_evaluate_coverage(state: State):
         return
 
     report_file = os.path.join(shared_folder, calls_report)
-    levels = callgraph.process_call_graph(report_file)
+    levels, G = callgraph.process_call_graph(report_file)
 
     coverage_report = rt.run(
         f"/out/{harness_binary}", [f"/shared/seeds/{i}" for i in generated_seeds]
@@ -255,7 +266,7 @@ def node_system_evaluate_coverage(state: State):
     coverage_info = coverage.parse_libfuzzer_log(coverage_report, levels)
 
     summary = []
-    callgraph.visualize_call_tree(report_file, coverage_info, state['rounds'], state['runtime_folder'])
+    callgraph.visualize_call_tree(levels, G, coverage_info, state['rounds'], state['runtime_folder'])
     sum_covered_edges = 0
     for func in coverage_info:
         sum_covered_edges += func['covered_edges']
@@ -476,7 +487,7 @@ def start_seedgen(
     )
 
     app = graph.compile()
-    print(app.get_graph().draw_mermaid())
+    # print(app.get_graph().draw_mermaid())
 
     initial_state = {
         "runtime_folder": runtime_folder,
