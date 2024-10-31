@@ -1,7 +1,17 @@
 import re
 import networkx as nx
 import matplotlib.pyplot as plt
+from typing import TypedDict
 
+# the branch of prioritized branches in the call graph
+class Branch(TypedDict):
+    sub_branches: nx.DiGraph
+    name: str
+    func_coverage_before: list[dict]
+    generator_scripts: list[str]
+    coverage_reports: list[str]
+    prompt: str
+    increase_coverage: bool
 
 def is_stl_function(func_name):
     stl_patterns = [
@@ -138,31 +148,33 @@ def visualize_call_tree(levels, G, coverage_info, num, runtime_folder):
     plt.title("Filtered Call Tree with Coverage Information")
     plt.savefig(f"{runtime_folder}/visualization/callgraph_{num}.png")
 
-def select_candidate_branches(levels, G, coverage_info, candidate_branches, k):
+def select_candidate_branches(levels, G, coverage_info, k=3):
+    # Use valid_nodes function to create tmp_G
+    tmp_G = valid_nodes(levels, G)
+    candidate_branches = []
+    
     # Convert coverage_info into a dictionary for fast lookup by function name
     coverage_dict = {func['name']: func for func in coverage_info}
-    
-    tmp_G = valid_nodes(levels, G)
 
-    # Traverse from level 0 to k to find candidate branches with uncovered edges
-    for node in tmp_G.nodes:
-        level = levels.get(node, float('inf'))
-        if level == 0:  # Start from level 0 nodes
-            # Check if this node or any of its k-level callees have uncovered edges
-            candidate_branch = [node]
-            branch_has_uncovered = False
+    # Start from the root node (LLVMFuzzerTestOneInput)
+    root_node = 'LLVMFuzzerTestOneInput'
+    if root_node not in tmp_G:
+        return candidate_branches
 
-            # Traverse up to k levels of neighbors
-            for depth in range(1, k + 1):
-                for callee in nx.descendants_at_distance(tmp_G, node, depth):
-                    callee_coverage = coverage_dict.get(callee)
-                    if callee_coverage and callee_coverage['covered_edges'] < callee_coverage['total_edges']:
-                        branch_has_uncovered = True
-                        if callee not in candidate_branch:
-                            candidate_branch.append(callee)
+    # Process each level up to k
+    for depth in range(1, k + 1):
+        # Find all branches from the root with the current depth
+        branches = []
+        for leaf in nx.descendants_at_distance(tmp_G, root_node, depth):
+            # Generate the branch path from root to the leaf
+            path = nx.shortest_path(tmp_G, source=root_node, target=leaf)
+            branches.append(path)
+        
+        # Filter branches based on the coverage of the leaf node
+        for branch in branches:
+            leaf_node = branch[-1]
+            leaf_coverage = coverage_dict.get(leaf_node, None)
+            if leaf_coverage and leaf_coverage['covered_edges'] < leaf_coverage['total_edges']:
+                candidate_branches.append(branch)
 
-            # Only add to candidate branches if there's an uncovered edge
-            if branch_has_uncovered:
-                candidate_branches.append(candidate_branch)
-    
     return candidate_branches

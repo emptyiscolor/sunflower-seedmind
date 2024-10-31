@@ -1,6 +1,5 @@
 import json
 import subprocess
-import networkx as nx
 import os
 import time
 import uuid
@@ -50,16 +49,6 @@ model = ChatOpenAI(
 )
 
 
-# the branch of prioritized branches in the call graph
-class Branch(TypedDict):
-    sub_branches: nx.DiGraph
-    name: str
-    func_coverage_before: list[dict]
-    generator_scripts: list[str]
-    coverage_reports: list[str]
-    prompt: str
-    increase_coverage: bool
-
 # Define the state.
 class State(TypedDict):
     # Predefined
@@ -91,7 +80,7 @@ class State(TypedDict):
     suggestions_generated: bool
     
     # for prioritized branches
-    candidate_branches: list[Branch]
+    candidate_branches: list[callgraph.Branch]
 
 # Define the nodes
 # We use a naming convention to make it easier to understand the code.
@@ -270,6 +259,7 @@ def node_system_evaluate_coverage(state: State):
 
     summary = []
     callgraph.visualize_call_tree(levels, G, coverage_info, state['rounds'], state['runtime_folder'])
+    selected_branches = callgraph.select_candidate_branches(levels, G, coverage_info)
     sum_covered_edges = 0
     for func in coverage_info:
         sum_covered_edges += func['covered_edges']
