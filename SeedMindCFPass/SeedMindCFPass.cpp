@@ -13,17 +13,17 @@
 
 using namespace llvm;
 
-class FineIWillDoItMyselfPass : public PassInfoMixin<FineIWillDoItMyselfPass> {
+class SeedMindCFPass : public PassInfoMixin<SeedMindCFPass> {
 public:
     static char ID;
-    explicit FineIWillDoItMyselfPass() { }
+    explicit SeedMindCFPass() { }
     static bool isRequired() { return true; }
 
     PreservedAnalyses run(Module& M, ModuleAnalysisManager& AM)
     {
 
         FunctionCallee hookFunc = M.getOrInsertFunction(
-            "__cyg_profile_func_enter_fine_i_will_do_it_myself",
+            "__seedmind_func_enter",
             FunctionType::get(Type::getVoidTy(M.getContext()), false));
 
         for (auto& F : M.functions()) {
@@ -42,10 +42,10 @@ extern "C" ::llvm::PassPluginLibraryInfo LLVM_ATTRIBUTE_WEAK
 llvmGetPassPluginInfo()
 {
     return {
-        LLVM_PLUGIN_API_VERSION, "FineIWillDoItMyselfPass", LLVM_VERSION_STRING,
+        LLVM_PLUGIN_API_VERSION, "SeedMindCFPass", LLVM_VERSION_STRING,
         [](PassBuilder& PB) {
             PB.registerOptimizerLastEPCallback([](ModulePassManager& MPM, OptimizationLevel Level) {
-                MPM.addPass(FineIWillDoItMyselfPass());
+                MPM.addPass(SeedMindCFPass());
             });
         }
     };

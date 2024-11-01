@@ -1,33 +1,67 @@
 use backtrace::Backtrace;
-use once_cell::sync::OnceCell;
-use std::collections::{HashMap, HashSet};
+use dashmap::{DashMap, DashSet};
+use lazy_static::lazy_static;
+use std::cell::Cell;
 use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::os::raw::c_void;
-use std::sync::{Mutex, RwLock};
+use std::sync::Mutex;
 
-static LOG_FILE: OnceCell<Mutex<File>> = OnceCell::new();
-static SYMBOL_CACHE: OnceCell<RwLock<HashMap<usize, Option<String>>>> = OnceCell::new();
-static SEEN_PAIRS: OnceCell<Mutex<HashSet<(Option<String>, Option<String>)>>> = OnceCell::new();
-static LOGGING_ENABLED: OnceCell<Mutex<bool>> = OnceCell::new();
+type FunctionName = Option<String>;
+type FunctionPair = (FunctionName, FunctionName);
+
+lazy_static! {
+    static ref ENABLED: bool = env::var("EXPORT_CALLS").is_ok();
+    static ref LOG_FILE: Mutex<Option<File>> = Mutex::new(None);
+    static ref SEEN_PAIRS: DashSet<FunctionPair> = DashSet::new();
+    static ref SYMBOL_CACHE: DashMap<usize, FunctionName> = DashMap::new();
+}
+
+// This is a thread-local variable that prevents recursion.
+// Without it, we could get infinite recursion:
+// When cyg_profile_func_enter calls libC function like write() to log a call,
+// if write() is also instrumented (or replaced by a instrumented wrapper), it triggers cyg_profile_func_enter again,
+// creating an infinite loop that would crash with stack overflow.
+thread_local! {
+    static PREVENT_RECURSION: Cell<bool> = const { Cell::new(false) };
+}
+
+struct RecursionGuard;
+
+impl RecursionGuard {
+    fn new() -> Self {
+        PREVENT_RECURSION.set(true);
+        RecursionGuard
+    }
+}
+
+impl Drop for RecursionGuard {
+    fn drop(&mut self) {
+        PREVENT_RECURSION.set(false);
+    }
+}
 
 #[no_mangle]
-pub extern "C" fn __cyg_profile_func_enter_fine_i_will_do_it_myself() {
+pub extern "C" fn __seedmind_func_enter() {
+    if !*ENABLED {
+        return;
+    }
+
+    if PREVENT_RECURSION.get() {
+        eprintln!("Recursion detected in __seedmind_func_enter");
+        return;
+    }
+
+    // create a guard that will automatically set PREVENT_RECURSION to false when it goes out of scope
+    let _guard = RecursionGuard::new();
+
     static INITIALIZED: std::sync::Once = std::sync::Once::new();
     INITIALIZED.call_once(|| {
-        let logging_enabled = env::var("EXPORT_CALLS").is_ok();
-        LOGGING_ENABLED
-            .set(Mutex::new(logging_enabled))
-            .expect("Failed to set logging enabled");
-        if logging_enabled {
+        if *ENABLED {
             initialize_logging();
         }
     });
-
-    if !LOGGING_ENABLED.get().unwrap().lock().unwrap().clone() {
-        return;
-    }
 
     let current_bt = Backtrace::new_unresolved();
     let frames = current_bt.frames();
@@ -39,19 +73,13 @@ pub extern "C" fn __cyg_profile_func_enter_fine_i_will_do_it_myself() {
         .find_map(|frame| symbolize_pc(frame.ip()));
 
     let pair = (callee.clone(), caller.clone());
-    if !SEEN_PAIRS
-        .get()
-        .expect("SEEN_PAIRS not initialized")
-        .lock()
-        .unwrap()
-        .insert(pair)
-    {
+    if !SEEN_PAIRS.insert(pair) {
+        // insert returns false means the hashset already has this pair.
         return;
     }
 
-    if let Some(log_file) = LOG_FILE.get() {
+    if let Some(file) = &mut *LOG_FILE.lock().expect("Failed to lock log file") {
         let tid = unsafe { libc::syscall(libc::SYS_gettid) };
-        let mut file = log_file.lock().expect("Failed to lock log file");
         let callee = callee.unwrap_or("<null>".to_string());
         let caller = caller.unwrap_or("<null>".to_string());
         writeln!(file, "{:?}|{}|{}", tid, callee, caller).expect("Failed to write to log file");
@@ -62,22 +90,17 @@ pub extern "C" fn __cyg_profile_func_enter_fine_i_will_do_it_myself() {
 #[inline]
 fn symbolize_pc(pc: *mut c_void) -> Option<String> {
     let pc_usize = pc as usize;
-    if let Some(cache) = SYMBOL_CACHE.get() {
-        if let Some(symbol) = cache.read().unwrap().get(&pc_usize) {
-            return symbol.clone();
-        }
+    if let Some(cache) = SYMBOL_CACHE.get(&pc_usize) {
+        return cache.clone();
     }
 
     let symbol = __symbolize_pc(pc);
-    if let Some(cache) = SYMBOL_CACHE.get() {
-        cache.write().unwrap().insert(pc_usize, symbol.clone());
-    }
+    SYMBOL_CACHE.insert(pc_usize, symbol.clone());
 
     symbol
 }
 
 #[inline]
-/// Mimics the behavior of `__sanitizer_symbolize_pc` from ASAN, but uses `backtrace` crate to resolve the symbol and return the function name.
 fn __symbolize_pc(pc: *mut c_void) -> Option<String> {
     let mut result = None;
     backtrace::resolve(pc, |symbol| {
@@ -95,13 +118,6 @@ fn initialize_logging() {
         .truncate(true)
         .open("/tmp/callgraph.log")
         .expect("Failed to open log file");
-    LOG_FILE
-        .set(Mutex::new(file))
-        .expect("Failed to set log file");
-    SYMBOL_CACHE
-        .set(RwLock::new(HashMap::new()))
-        .expect("Failed to set symbol cache");
-    SEEN_PAIRS
-        .set(Mutex::new(HashSet::new()))
-        .expect("Failed to set seen pairs");
+
+    *LOG_FILE.lock().expect("Failed to lock log file") = Some(file);
 }

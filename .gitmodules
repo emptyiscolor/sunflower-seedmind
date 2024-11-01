@@ -7,3 +7,6 @@
 [submodule "getcov"]
 	path = getcov
 	url = https://github.com/whexy/getcov
+[submodule "bandld"]
+	path = bandld
+	url = https://github.com/whexy/bandld.git

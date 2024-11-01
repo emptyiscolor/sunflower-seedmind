@@ -122,6 +122,11 @@ def compile_project(root, project_name, project_config):
         docker_image_name,
         ".",
     ]
+
+    # print the command for debugging
+    print(f"[+] Running command: {' '.join(build_command)}")
+
+
     subprocess.run(build_command, check=True,
                    cwd=os.path.dirname(dockerfile_path))
 
@@ -133,8 +138,9 @@ def compile_project(root, project_name, project_config):
         "/shared": f"{project_dir}/shared",
         "/clang-argus": get_prebuilt_binary_path("argus"),
         "/clang-argus++": get_prebuilt_binary_path("argus"),
+        "/bandld": get_prebuilt_binary_path("bandld"),
         "/libcallgraph_rt.a": get_prebuilt_binary_path("libcallgraph_rt.a"),
-        "/FineIWillDoItMyselfPass.so": get_prebuilt_binary_path("FineIWillDoItMyselfPass.so"),
+        "/SeedMindCFPass.so": get_prebuilt_binary_path("SeedMindCFPass.so"),
     }
     mount_commands = list(
         itertools.chain.from_iterable(
@@ -149,8 +155,13 @@ def compile_project(root, project_name, project_config):
         "ADD_RUNTIME": "1",
         "BANDFUZZ_RUNTIME": "libcallgraph_rt.a",  # linking runtime to the target
         "BANDFUZZ_OPT": "0",  # disable optimization (-O0)
-        "ADD_ADDITIONAL_PASSES": "FineIWillDoItMyselfPass.so",
+        "ADD_ADDITIONAL_PASSES": "SeedMindCFPass.so",
         "BANDFUZZ_PROFILE": "1",
+        "CP_HARNESS_EXTRA_CFLAGS": "-fsanitize=fuzzer-no-link",
+        "CP_HARNESS_EXTRA_CXXFLAGS": "-fsanitize=fuzzer-no-link",
+        "CP_BASE_EXTRA_CFLAGS": "-fsanitize=fuzzer-no-link",
+        "CP_BASE_EXTRA_CXXFLAGS": "-fsanitize=fuzzer-no-link",
+        "CP_BASE_EXTRA_LDFLAGS": "-fsanitize=fuzzer-no-link",
     }
     environment_commands = list(
         itertools.chain.from_iterable(
@@ -170,6 +181,10 @@ def compile_project(root, project_name, project_config):
         + environment_commands
         + [docker_image_name]
     )
+
+    # print the command for debugging
+    print(f"[+] Running command: {' '.join(run_command)}")
+
     process = subprocess.Popen(run_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     for line in process.stdout:
         print(line, end='')
@@ -195,7 +210,7 @@ def start_daemon(root, project_name, project_config) -> tuple[str, str]:
         "/out": f"{project_dir}/out",
         "/work": f"{project_dir}/work",
         "/shared": f"{project_dir}/shared",
-        "/FineIWillDoItMyselfPass.so": get_prebuilt_binary_path("FineIWillDoItMyselfPass.so"),
+        "/SeedMindCFPass.so": get_prebuilt_binary_path("SeedMindCFPass.so"),
         "/seedgen-injected": get_prebuilt_binary_path("seedgen-injected"),
         "/getcov": get_prebuilt_binary_path("getcov"),
     }
@@ -212,7 +227,8 @@ def start_daemon(root, project_name, project_config) -> tuple[str, str]:
         "ADD_RUNTIME": "1",
         "BANDFUZZ_RUNTIME": "libcallgraph_rt.a",  # linking runtime to the target
         "BANDFUZZ_OPT": "0",  # disable optimization (-O0)
-        "ADD_ADDITIONAL_PASSES": "FineIWillDoItMyselfPass.so",
+        "ADD_ADDITIONAL_PASSES": "SeedMindCFPass.so",
+        "ASAN_OPTIONS": "detect_leaks=0",
     }
     environment_commands = list(
         itertools.chain.from_iterable(

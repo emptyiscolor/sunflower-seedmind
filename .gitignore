@@ -100,6 +100,7 @@ cython_debug/
 # SeedGen
 
 prebuilt/argus
+prebuilt/bandld
 prebuilt/getcov
 prebuilt/libcallgraph_rt.a
 prebuilt/seedgen-injected
