@@ -259,7 +259,7 @@ def node_system_evaluate_coverage(state: State):
 
     summary = []
     callgraph.visualize_call_tree(levels, G, coverage_info, state['rounds'], state['runtime_folder'])
-    selected_branches = callgraph.select_candidate_branches(levels, G, coverage_info)
+    selected_branches = callgraph.select_candidate_branches(levels, G, coverage_info, state)
     sum_covered_edges = 0
     for func in coverage_info:
         sum_covered_edges += func['covered_edges']

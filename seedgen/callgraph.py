@@ -3,15 +3,23 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from typing import TypedDict
 
+class Script(TypedDict):
+    generated_script: str
+    generated_seeds: list[str]
+    coverage_after: dict
+    runable: bool
+    improve_coverage: bool
+    
 # the branch of prioritized branches in the call graph
 class Branch(TypedDict):
-    sub_branches: nx.DiGraph
-    name: str
-    func_coverage_before: list[dict]
-    generator_scripts: list[str]
-    coverage_reports: list[str]
+    branches: str
+    used_model: str
+    branch_coverage: dict
+    global_coverage: dict
+    tracked_scripts: list[Script]
     prompt: str
-    increase_coverage: bool
+    has_increase_coverage: bool
+    fully_covered: bool
 
 def is_stl_function(func_name):
     stl_patterns = [
@@ -148,7 +156,7 @@ def visualize_call_tree(levels, G, coverage_info, num, runtime_folder):
     plt.title("Filtered Call Tree with Coverage Information")
     plt.savefig(f"{runtime_folder}/visualization/callgraph_{num}.png")
 
-def select_candidate_branches(levels, G, coverage_info, k=3):
+def select_candidate_branches(levels, G, coverage_info, state, k=3):
     # Use valid_nodes function to create tmp_G
     tmp_G = valid_nodes(levels, G)
     candidate_branches = []
@@ -177,4 +185,22 @@ def select_candidate_branches(levels, G, coverage_info, k=3):
             if leaf_coverage and leaf_coverage['covered_edges'] < leaf_coverage['total_edges']:
                 candidate_branches.append(branch)
 
+    return process_branch(candidate_branches, coverage_dict)
+
+
+def process_branch(branches: list[str], coverage_dict: dict):
+    # convert the branch and coverage info into a Branch object
+    candidate_branches = []
+    for branch in branches:
+        coverage_before_dict = {}
+        for func in branch:
+            coverage_before_dict[func] = coverage_dict[func]
+        candidate_branches.append(Branch(
+            branches=branch, 
+            func_coverage_before=coverage_before_dict,
+            generator_scripts=[], 
+            coverage_reports=[], 
+            prompt="", 
+            increase_coverage=[]
+        ))
     return candidate_branches
