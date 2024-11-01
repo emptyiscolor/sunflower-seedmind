@@ -4,9 +4,10 @@ RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 COPY --from=golang:1.22 /usr/local/go /usr/local/go
 ENV PATH="/usr/local/go/bin:/root/.cargo/bin:${PATH}"
 WORKDIR /app
-COPY FineIWillDoItMyselfPass/ /app/FineIWillDoItMyselfPass/
+COPY SeedMindCFPass/ /app/SeedMindCFPass/
 COPY argus/ /app/argus/
 COPY getcov/ /app/getcov/
+COPY bandld/ /app/bandld/
 COPY callgraph_rt/ /app/callgraph_rt/
 COPY seedgen-injected/ /app/seedgen-injected/
 CMD ["bash", "-c", "/app/prebuilt/build.sh"]

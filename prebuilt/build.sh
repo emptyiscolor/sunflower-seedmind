@@ -6,16 +6,21 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # NOTICE: THIS PASS MUST BE BUILT IN OSS-FUZZ ENVIRONMENT
-# FineIWillDoItMyself Pass
-cd $SCRIPT_DIR/../FineIWillDoItMyselfPass
+# SeedMindCFPass
+cd $SCRIPT_DIR/../SeedMindCFPass
 LLVM_CXXFLAGS=`llvm-config --cxxflags`
-clang++ -fno-rtti -O3 -g $LLVM_CXXFLAGS -fno-exceptions -Wno-deprecated-declarations FineIWillDoItMyselfPass.cpp -fPIC -shared -Wl,-soname,FineIWillDoItMyselfPass.so -o FineIWillDoItMyselfPass.so
-cp FineIWillDoItMyselfPass.so $SCRIPT_DIR/../prebuilt/FineIWillDoItMyselfPass.so
+clang++ -fno-rtti -O3 -g $LLVM_CXXFLAGS -fno-exceptions -Wno-deprecated-declarations SeedMindCFPass.cpp -fPIC -shared -Wl,-soname,SeedMindCFPass.so -o SeedMindCFPass.so
+cp SeedMindCFPass.so $SCRIPT_DIR/../prebuilt/SeedMindCFPass.so
 
 # Argus
 cd $SCRIPT_DIR/../argus
 cargo build --release
 cp target/release/argus $SCRIPT_DIR/../prebuilt/argus
+
+# bandld
+cd $SCRIPT_DIR/../bandld
+cargo build --release
+cp target/release/bandld $SCRIPT_DIR/../prebuilt/bandld
 
 # getcov
 cd $SCRIPT_DIR/../getcov
