@@ -8,6 +8,7 @@ import sys
 import argparse
 import yaml
 import subprocess
+import shutil
 
 from seedgen import source, workflow
 
@@ -90,7 +91,7 @@ def print_project_info(project_name, project_config):
     print("=" * 50 + "\n")
 
 
-# Compile the project, the artifacts will be stored in .tmp/<project_name>/out
+# Compile the project, the artifacts will be stored in .tmp/cache/<project_name>/out
 def compile_project(root, project_name, project_config):
     dockerfile_path = os.path.join(
         root, "projects", project_name, "Dockerfile")
@@ -99,20 +100,19 @@ def compile_project(root, project_name, project_config):
     if subprocess.run(["docker", "--version"]).returncode != 0:
         raise FileNotFoundError("Docker not found on the host machine")
 
-    project_dir = os.path.join(".tmp", project_name)
-    os.makedirs(project_dir, exist_ok=True)
-    os.makedirs(os.path.join(project_dir, "shared"), exist_ok=True)
+    cache_dir = os.path.join(".tmp", "cache", project_name)
+    os.makedirs(cache_dir, exist_ok=True)
 
     # check if project_dir/out exists, if so, we don't need to compile the project again
-    if os.path.exists(os.path.join(project_dir, "out")):
+    if os.path.exists(os.path.join(cache_dir, "out")):
         print(f"[*] Project '{project_name}' already compiled, skipping")
         return
 
-    os.makedirs(os.path.join(project_dir, "out"))
-    os.makedirs(os.path.join(project_dir, "work"))
+    os.makedirs(os.path.join(cache_dir, "out"))
+    os.makedirs(os.path.join(cache_dir, "work"))
 
-    project_dir = os.path.abspath(project_dir)
-    print(f"[+] Project directory: {project_dir}")
+    cache_dir = os.path.abspath(cache_dir)
+    print(f"[+] Project directory: {cache_dir}")
 
     docker_image_name = f"oss-fuzz-build-{project_name}"
     build_command = [
@@ -126,16 +126,14 @@ def compile_project(root, project_name, project_config):
     # print the command for debugging
     print(f"[+] Running command: {' '.join(build_command)}")
 
-
     subprocess.run(build_command, check=True,
                    cwd=os.path.dirname(dockerfile_path))
 
     # Run the Docker container with the project image
     # Mount the `out` and `work` directories to the temporary directory
     mount_configs = {
-        "/out": f"{project_dir}/out",
-        "/work": f"{project_dir}/work",
-        "/shared": f"{project_dir}/shared",
+        "/out": f"{cache_dir}/out",
+        "/work": f"{cache_dir}/work",
         "/clang-argus": get_prebuilt_binary_path("argus"),
         "/clang-argus++": get_prebuilt_binary_path("argus"),
         "/bandld": get_prebuilt_binary_path("bandld"),
@@ -147,16 +145,21 @@ def compile_project(root, project_name, project_config):
             ("-v", f"{src}:{dest}") for dest, src in mount_configs.items()
         )
     )
+
     # Setup the environment variables
     environment_configs = {
-        "FUZZING_LANGUAGE": project_config["language"],
+        # Use Argus to compile the project
         "CC": "/clang-argus",
         "CXX": "/clang-argus++",
-        "ADD_RUNTIME": "1",
-        "BANDFUZZ_RUNTIME": "libcallgraph_rt.a",  # linking runtime to the target
-        "BANDFUZZ_OPT": "0",  # disable optimization (-O0)
+        # Argus settings (see https://github.com/whexy/argus for more details)
         "ADD_ADDITIONAL_PASSES": "SeedMindCFPass.so",
+        "ADD_RUNTIME": "1",
+        "BANDFUZZ_OPT": "0",
         "BANDFUZZ_PROFILE": "1",
+        "BANDFUZZ_RUNTIME": "libcallgraph_rt.a",
+        # For OSS-Fuzz projects only:
+        "FUZZING_LANGUAGE": project_config["language"],
+        # For AIxCC CPs only:
         "CP_HARNESS_EXTRA_CFLAGS": "-fsanitize=fuzzer-no-link",
         "CP_HARNESS_EXTRA_CXXFLAGS": "-fsanitize=fuzzer-no-link",
         "CP_BASE_EXTRA_CFLAGS": "-fsanitize=fuzzer-no-link",
@@ -185,32 +188,41 @@ def compile_project(root, project_name, project_config):
     # print the command for debugging
     print(f"[+] Running command: {' '.join(run_command)}")
 
-    process = subprocess.Popen(run_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    process = subprocess.Popen(
+        run_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     for line in process.stdout:
         print(line, end='')
     process.wait()
     if process.returncode != 0:
         raise subprocess.CalledProcessError(process.returncode, run_command)
 
-# Start the daemon in container
 
+# Run the project. All artifacts will be stored in .tmp/<project_name>/<runtime_id>/
+def run_project(root, project_name, project_config) -> tuple[str, str]:
+    artifacts_dir = os.path.abspath(os.path.join(".tmp", project_name))
+    os.makedirs(artifacts_dir, exist_ok=True)
 
-def start_daemon(root, project_name, project_config) -> tuple[str, str]:
-    project_dir = os.path.abspath(os.path.join(".tmp", project_name))
+    # determine the runtime id. We get the largest number and plus one
+    runtime_ids = [int(d) for d in os.listdir(artifacts_dir) if d.isdigit()]
+    runtime_id = max(runtime_ids) + 1 if runtime_ids else 0
 
-    # double check if project_dir/out exists, if not, the project is not compiled
+    project_dir = os.path.join(artifacts_dir, str(runtime_id))
+
+    # copy files from .tmp/cache/<project_name> to .tmp/<project_name>/<runtime_id>
+    shutil.copytree(os.path.join(".tmp", "cache", project_name), project_dir)
     if not os.path.exists(os.path.join(project_dir, "out")):
         raise FileNotFoundError(f"Project '{project_name}' not compiled")
+
+    # create a "shared" folder in project_dir
+    os.makedirs(os.path.join(project_dir, "shared"))
 
     docker_image_name = f"oss-fuzz-build-{project_name}"
 
     # Run the Docker container with the project image
-    # Mount the `out` and `work` directories to the temporary directory
+    # Mount the `out` and `shared` directories to the temporary directory
     mount_configs = {
         "/out": f"{project_dir}/out",
-        "/work": f"{project_dir}/work",
         "/shared": f"{project_dir}/shared",
-        "/SeedMindCFPass.so": get_prebuilt_binary_path("SeedMindCFPass.so"),
         "/seedgen-injected": get_prebuilt_binary_path("seedgen-injected"),
         "/getcov": get_prebuilt_binary_path("getcov"),
     }
@@ -221,13 +233,6 @@ def start_daemon(root, project_name, project_config) -> tuple[str, str]:
     )
     # Setup the environment variables
     environment_configs = {
-        "FUZZING_LANGUAGE": project_config["language"],
-        "CC": "/clang-argus",
-        "CXX": "/clang-argus++",
-        "ADD_RUNTIME": "1",
-        "BANDFUZZ_RUNTIME": "libcallgraph_rt.a",  # linking runtime to the target
-        "BANDFUZZ_OPT": "0",  # disable optimization (-O0)
-        "ADD_ADDITIONAL_PASSES": "SeedMindCFPass.so",
         "ASAN_OPTIONS": "detect_leaks=0",
     }
     environment_commands = list(
@@ -251,7 +256,7 @@ def start_daemon(root, project_name, project_config) -> tuple[str, str]:
     )
     result = subprocess.run(run_command, check=True, stdout=subprocess.PIPE)
     container_id = result.stdout.decode().strip()
-    return project_name, container_id
+    return os.path.join(project_name, str(runtime_id)), container_id
 
 
 def get_prebuilt_binary_path(binary_name):
@@ -259,7 +264,8 @@ def get_prebuilt_binary_path(binary_name):
         os.path.dirname(os.path.realpath(__file__)), "prebuilt", binary_name
     )
     if not os.path.exists(binary_path):
-        raise FileNotFoundError(f"{binary_name} not found")
+        raise FileNotFoundError(
+            f"{binary_name} not found. Please run `make clean` and then `make` in the root directory to build the tool.")
     return binary_path
 
 
@@ -280,7 +286,7 @@ def main():
         compile_project(root, project_name, project_config)
 
         # Start the daemon
-        runtime_id, container_id = start_daemon(
+        runtime_id, container_id = run_project(
             root, project_name, project_config)
 
         # Start the agent
@@ -298,7 +304,6 @@ def main():
 
 if __name__ == "__main__":
     os.makedirs(".tmp", exist_ok=True)
-    os.system(f"rm -rf /workspaces/SeedGen/.tmp/libxml2/shared")
     # Path to libclang.so, run the script in dev container!
     LIBCLANG_PATH = "/usr/lib/llvm-18/lib/libclang.so"
     source.set_libclang_path(LIBCLANG_PATH)

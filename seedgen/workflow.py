@@ -108,9 +108,9 @@ def node_agent_generation(state: State):
             suggestions=state["suggestions"][-1],
         )
 
-    # write prompt to prompt_{round}.txt in shared folder
+    # write prompt to prompt_{round}.txt in runtime folder
     with open(
-        os.path.join(state["shared_folder"], f"prompt_{state['rounds'] + 1}.txt"), "w"
+        os.path.join(state["runtime_folder"], f"prompt_{state['rounds'] + 1}.txt"), "w"
     ) as f:
         f.write(prompt)
     
@@ -234,6 +234,7 @@ def node_system_evaluate_coverage(state: State):
     rt.wait_until_ready()
 
     harness_binary = state["harness_binary"]
+    runtime_folder = state["runtime_folder"]
     shared_folder = state["shared_folder"]
     generated_seeds = state["generated_seeds"]
 
@@ -251,8 +252,8 @@ def node_system_evaluate_coverage(state: State):
         f"/out/{harness_binary}", [f"/shared/seeds/{i}" for i in generated_seeds]
     )
 
-    # write coverage report to coverage_{round}.txt in shared folder
-    with open(os.path.join(shared_folder, f"coverage_{state['rounds']}.txt"), "w") as f:
+    # write coverage report to coverage_{round}.txt in runtime folder
+    with open(os.path.join(runtime_folder, f"coverage_{state['rounds']}.txt"), "w") as f:
         f.write(coverage_report)
 
     coverage_info = coverage.parse_libfuzzer_log(coverage_report, levels)
