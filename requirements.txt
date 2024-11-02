@@ -8,4 +8,5 @@ grpcio-tools
 grpcio-health-checking
 grpcio-reflection
 grpcio-status
+matplotlib
 networkx
