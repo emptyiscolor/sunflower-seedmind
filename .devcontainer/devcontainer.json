@@ -1,5 +1,5 @@
 {
-	"name": "Python 3",
+	"name": "SeedGen2",
 	"image": "mcr.microsoft.com/devcontainers/python:3.12",
     "features": {
         "ghcr.io/mikaello/devcontainer-features/modern-shell-utils:1": {},

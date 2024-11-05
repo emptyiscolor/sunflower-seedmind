@@ -1,4 +1,4 @@
-# SeedGen
+# SeedGen2
 
 ![](SeedGen.png)
 
