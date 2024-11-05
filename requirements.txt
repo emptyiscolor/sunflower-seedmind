@@ -10,3 +10,4 @@ grpcio-reflection
 grpcio-status
 matplotlib
 networkx
+mypy-protobuf

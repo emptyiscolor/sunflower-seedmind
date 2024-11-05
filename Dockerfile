@@ -36,13 +36,13 @@ WORKDIR /app
 COPY getcov/ /app/getcov/
 RUN cd getcov && cargo build --release
 
-# SeedGen Injected builder
-FROM gcr.io/oss-fuzz-base/base-builder AS builder_seedgen_injected
+# SeedD builder
+FROM gcr.io/oss-fuzz-base/base-builder AS builder_seedd
 COPY --from=golang:1.22 /usr/local/go /usr/local/go
 ENV PATH="/usr/local/go/bin:${PATH}"
 WORKDIR /app
-COPY seedgen-injected/ /app/seedgen-injected/
-RUN cd seedgen-injected && make
+COPY seedd/ /app/seedd/
+RUN cd seedd && make
 
 
 # Collect artifacts
@@ -54,4 +54,4 @@ COPY --from=builder_llvm_pass /app/llvm/SeedMindCFPass.so SeedMindCFPass.so
 COPY --from=builder_argus /app/argus/target/release/argus argus
 COPY --from=builder_bandld /app/bandld/target/release/bandld bandld
 COPY --from=builder_getcov /app/getcov/target/release/getcov getcov
-COPY --from=builder_seedgen_injected /app/seedgen-injected/bin/seedgen-injected seedgen-injected
+COPY --from=builder_seedd /app/seedd/bin/seedd seedd
