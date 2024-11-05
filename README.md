@@ -2,32 +2,58 @@
 
 ![](SeedGen.png)
 
-Seed Generation Framework for OSS-Fuzz
+## Overview
 
-## Why Does This Project Exist?
+SeedGen2 is a framework designed to generate initial seeds for OSS-Fuzz, enhancing the effectiveness of fuzzing. By leveraging the capabilities of a Large Language Model (LLM), SeedGen2 can create valid seeds and improve them using harness and coverage information.
 
-Initial seeds are crucial for effective fuzzing.
+## Why SeedGen2?
 
-Leveraging the extensive knowledge of commonly known file types, a Large Language Model (LLM) can serve as an excellent resource for creating valid seeds. Additionally, the LLM's capability in understanding code and performing logical inference can be utilized to enhance generated seeds by leveraging harness and coverage information.
+- **Initial Seeds**: Crucial for effective fuzzing.
+- **LLM Capabilities**: Utilizes extensive knowledge of file types and code understanding to generate and enhance seeds.
+- **Harness and Coverage**: Leverages harness and coverage information to refine seeds.
 
-## Framework Architecture
+## Architecture
 
-SeedGen is composed of two main components: a lightweight, portable runtime and an LLM agent. The runtime is responsible for compiling and running the fuzzing harness within an OSS-Fuzz Docker container, as well as collecting coverage information. The LLM agent, on the other hand, possesses the capability for self-reflection.
+SeedGen2 consists of two main components:
+1. **Lightweight Runtime**: Compiles and runs the fuzzing harness within an OSS-Fuzz Docker container, collecting coverage information.
+2. **LLM Agent**: Capable of self-reflection and guided by a state machine to ensure tasks are managed effectively and LLM errors are preemptively fixed.
 
-To manage the LLM agent effectively, we utilize a state machine. This approach ensures that tasks are not entirely dependent on the LLM, allowing the state machine to guide and control its actions, and fix LLM errors in advance to avoid waste.
+## Getting Started
 
-## Steps
+### Prerequisites
+- Docker
+- Python 3.x
 
-1. **Build the tool**: Run `make` in the root directory to build the tool.
+### Steps
 
-2. **Run the Script**: Execute the following command to run the script:
-    ```shell
-    python3 oss-fuzz.py <project_name> <harness_name>
-    ```
-   - **Project Name**: This should match a directory name in `oss-fuzz/projects/`, for example, `libxml2`.
-   - **Harness Name**: This should be the name of an executable file found in the `/out` folder after building the project.
+1. **Build the Tool**
+   ```shell
+   make
+   ```
 
+2. **Run the Script**
+   ```shell
+   python3 oss-fuzz.py <project_name> <harness_name>
+   ```
+   - **Project Name**: Directory name in `oss-fuzz/projects/`, e.g., `libxml2`.
+   - **Harness Name**: Executable file in the `/out` folder after building the project.
 
-## Author Information
+## Usage
+
+### Example
+To run SeedGen2 for the `libxml2` project with the `xmlreader` harness:
+```shell
+python3 oss-fuzz.py libxml2 xmlreader
+```
+
+## Author
 
 - [Wenxuan Shi](mailto:wenxuan.shi@northwestern.edu)
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request if you have any improvements or suggestions.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
