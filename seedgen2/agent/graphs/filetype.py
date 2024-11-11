@@ -29,7 +29,6 @@ class InitialState(TypedDict):
     # states
     file_type_determined: bool
     file_type: str
-    file_type_description: str
     file_type_features: list[str]
 
     # error message
@@ -52,15 +51,13 @@ Here is the source code of the harness `{harness_file_name}`:
 ```
 
 You should return the file type of the seeds in a JSON format, with the following fields:
-- file_type: the file type of the seeds, e.g. `jpg`, `png`, `gif`, etc.
-- description: a short description of the file type, e.g. "JPEG image file"
+- file_type: the file type of the seeds, e.g. `jpg`, `png`, `gif`, etc. If the file type is not determined (or not a common known file type), you should return `unknown`.
 - features: a list of interesting features of the file type, e.g. "Color Space", "Chroma Subsampling", "Progressive Encoding", etc.
 
 Here is an example of the JSON format:
 ```json
 {{
     "file_type": "jpg",
-    "description": "JPEG image file",
     "features": ["Color Space", "Chroma Subsampling", "Progressive Encoding"]
 }}
 ```
@@ -76,7 +73,6 @@ Here is an example of the JSON format:
 ```json
 {{
     "file_type": "jpg",
-    "description": "JPEG image file",
     "features": ["Color Space", "Chroma Subsampling", "Progressive Encoding"]
 }}
 ```
@@ -105,13 +101,16 @@ def NODE_grab_json_from_response(state: InitialState):
     response = state["messages"][-1].content
     try:
         json_obj = json.loads(response)
+        print(f"[*] File type determined: {json_obj['file_type']}")
+        print(f"[*] File type features: {json_obj['features']}")
         return {
             "file_type_determined": True,
             "file_type": json_obj["file_type"],
-            "file_type_description": json_obj["description"],
             "file_type_features": json_obj["features"],
         }
     except Exception as e:
+        print(f"[*] Response: {response}")
+        print(f"[!] Failed to parse JSON from response: {e}")
         return {
             "file_type_determined": False,
             "error_happened": True,
@@ -136,7 +135,7 @@ def EDGE_error_happened(state: InitialState) -> bool:
     return state["error_happened"]
 
 
-def build_initial_graph() -> StateGraph[InitialState, FileTypeInfo]:
+def build_initial_graph():
     graph_builder = StateGraph(InitialState)
     graph_builder.add_node("node_determine_file_type",
                            NODE_determine_file_type)
@@ -162,7 +161,7 @@ def build_initial_graph() -> StateGraph[InitialState, FileTypeInfo]:
     return graph_builder.compile()
 
 
-def initial(harness_source_code: str, harness_file_name: str, project_name: str) -> FileTypeInfo:
+def GRAPH_filetype(harness_source_code: str, harness_file_name: str, project_name: str) -> FileTypeInfo:
     graph = build_initial_graph()
 
     initial_state = InitialState(
@@ -171,17 +170,15 @@ def initial(harness_source_code: str, harness_file_name: str, project_name: str)
         project_name=project_name,
         file_type_determined=False,
         file_type="",
-        file_type_description="",
         file_type_features=[],
         messages=[],
         error_happened=False,
         error_message="",
     )
 
-    result = graph.invoke(initial_state, debug=True)
+    result = graph.invoke(initial_state)
 
     return FileTypeInfo(
         file_type=result["file_type"],
-        description=result["file_type_description"],
         features=result["file_type_features"],
     )

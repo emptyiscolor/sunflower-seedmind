@@ -1,8 +1,10 @@
 from utils.grpc import SeedD
 from utils.coverage import parse_partially_covered_functions
 from utils.callgraph import build_graph_from_json, visualize_graph
+from utils.generators import SeedGeneratorStore
 
-from agent.graphs.initial import initial
+from agent.graphs.filetype import GRAPH_filetype
+from agent.graphs.generate import GRAPH_generate
 
 seedd = SeedD("172.17.0.2")
 
@@ -14,10 +16,19 @@ resp = seedd.get_region_source(
     end_column=2,
 )
 
-initial(
+store = SeedGeneratorStore()
+store.set_result_dir(".tmp/seedgen2")
+
+result = GRAPH_filetype(
     harness_source_code=resp.source,
     harness_file_name="xml.c",
     project_name="libxml2",
+)
+
+GRAPH_generate(
+    harness_code=resp.source,
+    file_type=result.get("file_type"),
+    feature=result.get("features")[0],
 )
 
 
