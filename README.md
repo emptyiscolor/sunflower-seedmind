@@ -1,4 +1,4 @@
-# SeedGen2
+# SeedGen2 (Project Sunflower)
 
 ## Overview
 
