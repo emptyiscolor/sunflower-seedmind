@@ -98,14 +98,5 @@ dmypy.json
 cython_debug/
 
 # SeedGen
-
-prebuilt/argus
-prebuilt/bandld
-prebuilt/getcov
-prebuilt/libcallgraph_rt.a
-prebuilt/seedgen-injected
-
+prebuilt/
 .tmp/
-my.env
-.vscode/launch.json
-oss-fuzz

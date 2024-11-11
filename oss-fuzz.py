@@ -10,7 +10,7 @@ import yaml
 import subprocess
 import shutil
 
-from seedgen import source, workflow
+# from seedgen import source, workflow
 
 
 def parse_args():
@@ -223,7 +223,7 @@ def run_project(root, project_name, project_config) -> tuple[str, str]:
     mount_configs = {
         "/out": f"{project_dir}/out",
         "/shared": f"{project_dir}/shared",
-        "/seedgen-injected": get_prebuilt_binary_path("seedgen-injected"),
+        "/seedd": get_prebuilt_binary_path("seedd"),
         "/getcov": get_prebuilt_binary_path("getcov"),
     }
     mount_commands = list(
@@ -248,7 +248,7 @@ def run_project(root, project_name, project_config) -> tuple[str, str]:
             "-d",
             "--privileged",
             "--shm-size=2g",
-            "--entrypoint=/seedgen-injected",
+            "--entrypoint=/seedd",
         ]
         + mount_commands
         + environment_commands
@@ -269,42 +269,42 @@ def get_prebuilt_binary_path(binary_name):
     return binary_path
 
 
-def main():
-    args = parse_args()
-    project_name = args.project_name
-    harness_binaries = args.harness_binaries
-    budget = args.budget
-    root = args.root
-    max_level = args.level
+# def main():
+#     args = parse_args()
+#     project_name = args.project_name
+#     harness_binaries = args.harness_binaries
+#     budget = args.budget
+#     root = args.root
+#     max_level = args.level
 
-    try:
-        project_yaml_path = validate_environment(root, project_name)
-        project_config = load_project_config(project_yaml_path)
-        print_project_info(project_name, project_config)
+#     try:
+#         project_yaml_path = validate_environment(root, project_name)
+#         project_config = load_project_config(project_yaml_path)
+#         print_project_info(project_name, project_config)
 
-        # Compile the project
-        compile_project(root, project_name, project_config)
+#         # Compile the project
+#         compile_project(root, project_name, project_config)
 
-        # Start the daemon
-        runtime_id, container_id = run_project(
-            root, project_name, project_config)
+#         # Start the daemon
+#         runtime_id, container_id = run_project(
+#             root, project_name, project_config)
 
-        # Start the agent
-        for harness_binary in harness_binaries:
-            workflow.start_seedgen(
-                runtime_id, container_id, project_name, harness_binary, budget, max_level
-            )
-    except (FileNotFoundError, ValueError) as e:
-        print(f"[-] Error: {e}", file=sys.stderr)
-        sys.exit(1)
-    finally:
-        if "container_id" in locals():
-            subprocess.run(["docker", "stop", container_id], check=True)
+#         # Start the agent
+#         for harness_binary in harness_binaries:
+#             workflow.start_seedgen(
+#                 runtime_id, container_id, project_name, harness_binary, budget, max_level
+#             )
+#     except (FileNotFoundError, ValueError) as e:
+#         print(f"[-] Error: {e}", file=sys.stderr)
+#         sys.exit(1)
+#     finally:
+#         if "container_id" in locals():
+#             subprocess.run(["docker", "stop", container_id], check=True)
 
 
-if __name__ == "__main__":
-    os.makedirs(".tmp", exist_ok=True)
-    # Path to libclang.so, run the script in dev container!
-    LIBCLANG_PATH = "/usr/lib/llvm-18/lib/libclang.so"
-    source.set_libclang_path(LIBCLANG_PATH)
-    main()
+# if __name__ == "__main__":
+#     os.makedirs(".tmp", exist_ok=True)
+#     # Path to libclang.so, run the script in dev container!
+#     LIBCLANG_PATH = "/usr/lib/llvm-18/lib/libclang.so"
+#     source.set_libclang_path(LIBCLANG_PATH)
+#     main()

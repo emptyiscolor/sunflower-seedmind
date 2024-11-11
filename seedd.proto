@@ -22,12 +22,11 @@ message RunSeedsResponse {
 }
 
 message GetRegionSourceRequest {
-  string harness_binary = 1;
-  string filepath = 2; // should be absolute path
-  uint64 start_line = 3;
-  uint64 start_column = 4;
-  uint64 end_line = 5;
-  uint64 end_column = 6; // exclusive
+  string filepath = 1; // should be absolute path
+  uint64 start_line = 2;
+  uint64 start_column = 3;
+  uint64 end_line = 4;
+  uint64 end_column = 5; // exclusive
 }
 
 message GetRegionSourceResponse {
@@ -35,11 +34,10 @@ message GetRegionSourceResponse {
 }
 
 message ExtractFunctionSourceRequest {
-  string harness_binary = 1;
-  string filepath = 2; // should be absolute path
+  string filepath = 1; // should be absolute path
   oneof location {
-    uint64 line = 3; // fuzzy search, can be any line number in the function
-    string function_name = 4; // function name to search for
+    uint64 line = 2; // fuzzy search, can be any line number in the function
+    string function_name = 3; // function name to search for
   }
 }
 
@@ -47,7 +45,9 @@ message ExtractFunctionSourceResponse {
   string source = 1; // source code in string format
 }
 
-message GetCallGraphRequest { string harness_binary = 1; }
+message GetCallGraphRequest {
+  // this request should be empty
+}
 
 message GetCallGraphResponse {
   string call_graph = 1; // call graph in JSON format

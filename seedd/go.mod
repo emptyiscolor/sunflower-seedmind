@@ -1,4 +1,4 @@
-module BugBuster/SeedGenInj
+module BugBuster/SeedD
 
 go 1.22.4
 

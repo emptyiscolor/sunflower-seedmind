@@ -11,3 +11,4 @@ grpcio-status
 matplotlib
 networkx
 mypy-protobuf
+pytest

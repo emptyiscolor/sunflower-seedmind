@@ -1,27 +1,5 @@
-import json
-import subprocess
-import os
-import time
-import uuid
-import dotenv
-dotenv.load_dotenv('/workspaces/SeedGen/my.env')
-from langchain_core.messages import (
-    AnyMessage,
-    HumanMessage,
-    SystemMessage,
-    RemoveMessage,
-)
-from langchain_openai import ChatOpenAI
-
-from langgraph.graph.message import add_messages
-from langgraph.graph import START, END, StateGraph
-from langchain_community.callbacks import get_openai_callback, OpenAICallbackHandler
-from langchain_core.runnables import RunnableConfig
-
-from typing import Annotated, TypedDict
-
-from operator import add
-
+import shutil
+from . import runtime, callgraph, coverage, source
 from .prompt_template import (
     SEED_GENERATOR_FROM_SCRATCH,
     EXAMPLE_SCRIPT_PROMPT_1,
@@ -29,23 +7,34 @@ from .prompt_template import (
     SEEDGEN_SYSTEM_PROMPT,
     SUMMARY_PROMPT,
 )
+from operator import add
+from typing import Annotated, TypedDict
+from langchain_core.runnables import RunnableConfig
+from langchain_community.callbacks import get_openai_callback, OpenAICallbackHandler
+from langgraph.graph import START, END, StateGraph
+from langgraph.graph.message import add_messages
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import (
+    AnyMessage,
+    HumanMessage,
+    SystemMessage,
+    RemoveMessage,
+)
+import json
+import subprocess
+import os
+import time
+import uuid
+import dotenv
+dotenv.load_dotenv('.env')
 
-from . import runtime, callgraph, coverage, source
-import shutil
-
-# Define the GPT model
-# model = ChatOpenAI(
-#     model="gpt-4o-mini", api_key="sk-whexy", base_url="https://litellm.mudd.cc"
-# )
-
-# model = ChatOpenAI(
-#     model="o1-mini",
-#     api_key="sk-whexy",
-#     base_url="https://litellm.mudd.cc",
-# )
+# Check if the API key is set in the environment
+if not os.getenv("OPENAI_API_KEY"):
+    raise ValueError("OPENAI_API_KEY not found in environment variables")
 
 model = ChatOpenAI(
-    model="gpt-4o"
+    model="gpt-4o",
+    api_key=os.getenv("OPENAI_API_KEY")
 )
 
 
@@ -56,7 +45,7 @@ class State(TypedDict):
     harness_binary: str
     shared_folder: str
     seeds_folder: str
-    rt: runtime.SeedGenRuntime
+    rt: runtime.SeedDRuntime
     cb: OpenAICallbackHandler
     budget: float
     start_time: float
@@ -78,7 +67,7 @@ class State(TypedDict):
     seeds_generation_failed_reason: str
     coverage_generated: bool
     suggestions_generated: bool
-    
+
     # for prioritized branches
     candidate_branches: list[callgraph.Branch]
 
@@ -96,7 +85,8 @@ def node_agent_generation(state: State):
         remove_commands.append(RemoveMessage(id=message.id))
 
     print("[+] Start agent generation, round ", state["rounds"] + 1)
-    prompt = SEED_GENERATOR_FROM_SCRATCH.format(harness_code=state["harness_code"])
+    prompt = SEED_GENERATOR_FROM_SCRATCH.format(
+        harness_code=state["harness_code"])
     if state["rounds"] == 0:
         # Fresh start
         prompt += "\n\n" + EXAMPLE_SCRIPT_PROMPT_1
@@ -110,10 +100,11 @@ def node_agent_generation(state: State):
 
     # write prompt to prompt_{round}.txt in runtime folder
     with open(
-        os.path.join(state["runtime_folder"], f"prompt_{state['rounds'] + 1}.txt"), "w"
+        os.path.join(state["runtime_folder"], f"prompt_{
+                     state['rounds'] + 1}.txt"), "w"
     ) as f:
         f.write(prompt)
-    
+
     # Some model doesn't support system message (e.g., o1-mini), so we add the system message prompt to the beginning of the user prompt
     prompt = SEEDGEN_SYSTEM_PROMPT + "\n\n" + prompt
     messages = [
@@ -177,7 +168,8 @@ def node_system_fetch_code(state: State):
             "script_generated": False,
         }
     else:
-        generated_script = last_response[start + len("```python\n") : end].strip()
+        generated_script = last_response[start +
+                                         len("```python\n"): end].strip()
         return {
             "generated_scripts": [generated_script],
             "script_generated": True,
@@ -200,7 +192,8 @@ def node_system_run_generated_script(state: State):
             result = subprocess.run(
                 [
                     "python3",
-                    f"{state['runtime_folder']}/generator/generator_{state['rounds']}.py",
+                    f"{state['runtime_folder']
+                       }/generator/generator_{state['rounds']}.py",
                     f"{seeds_folder}/{seeds_batch_id}_{i}",
                 ],
                 capture_output=True,
@@ -259,8 +252,10 @@ def node_system_evaluate_coverage(state: State):
     coverage_info = coverage.parse_libfuzzer_log(coverage_report, levels)
 
     summary = []
-    callgraph.visualize_call_tree(levels, G, coverage_info, state['rounds'], state['runtime_folder'])
-    selected_branches = callgraph.select_candidate_branches(levels, G, coverage_info, state)
+    callgraph.visualize_call_tree(
+        levels, G, coverage_info, state['rounds'], state['runtime_folder'])
+    selected_branches = callgraph.select_candidate_branches(
+        levels, G, coverage_info, state)
     sum_covered_edges = 0
     for func in coverage_info:
         sum_covered_edges += func['covered_edges']
@@ -276,7 +271,8 @@ def node_system_evaluate_coverage(state: State):
         shared_file = rt.share(filename)
         if shared_file is None:
             print(
-                f"[-] Error: Failed to require the file from OSS-Fuzz docker container {filename} for function {func['name']}"
+                f"[-] Error: Failed to require the file from OSS-Fuzz docker container {
+                    filename} for function {func['name']}"
             )
             continue
         shared_filename = os.path.join(shared_folder, shared_file)
@@ -287,7 +283,8 @@ def node_system_evaluate_coverage(state: State):
             uncovered_lines.append(int(uncovered_line_number))
 
         name = func["name"]
-        coverages = f"Coverage (covered edges / total edges): {func['covered_edges']}/{func['total_edges']}"
+        coverages = f"Coverage (covered edges / total edges): {
+            func['covered_edges']}/{func['total_edges']}"
         # print(f"[+] Function {name} {coverages}")
 
         prompt = f"Function Information:\n" f"Name: {name}\n" f"{coverages}\n"
@@ -299,11 +296,12 @@ def node_system_evaluate_coverage(state: State):
             first_known_line = int(line) - 1
             last_known_line = max(uncovered_lines + [first_known_line])
             summary.append(
-                f"source code (maybe incomplete) from line {first_known_line} to {last_known_line}:"
+                f"source code (maybe incomplete) from line {
+                    first_known_line} to {last_known_line}:"
             )
             with open(shared_filename, "r") as f:
                 lines = f.readlines()
-                function_source = lines[first_known_line : last_known_line + 10]
+                function_source = lines[first_known_line: last_known_line + 10]
                 for i, line_content in enumerate(
                     function_source, start=first_known_line + 1
                 ):
@@ -330,7 +328,8 @@ def node_agent_suggestions(state: State):
 
     messages = state["messages"]
     messages.append(
-        HumanMessage(content=SUMMARY_PROMPT.format(coverage_report=coverage_report))
+        HumanMessage(content=SUMMARY_PROMPT.format(
+            coverage_report=coverage_report))
     )
     response = model.invoke(messages)
 
@@ -407,7 +406,8 @@ def start_seedgen(
     ).stdout.strip()
 
     print(
-        f"[+] The SeedGen runtime service is running at {ip_addr}, waiting for it to be ready..."
+        f"[+] The SeedGen runtime service is running at {
+            ip_addr}, waiting for it to be ready..."
     )
 
     runtime_folder = os.path.join(".tmp", runtime_id)
@@ -425,12 +425,13 @@ def start_seedgen(
     # Create a /seeds directory in the shared folder
     seeds_folder = os.path.join(shared_folder, "seeds")
     os.makedirs(seeds_folder, exist_ok=True)
-    
+
     # Start SeedGen in the Docker container
-    rt = runtime.SeedGenRuntime(ip_addr)
+    rt = runtime.SeedDRuntime(ip_addr)
     rt.wait_until_ready()
     print(
-        f"[+] SeedGen service is ready, starting the seed generation process for {project_name}/{harness_binary}"
+        f"[+] SeedGen service is ready, starting the seed generation process for {
+            project_name}/{harness_binary}"
     )
 
     # Locate the harness function
@@ -443,7 +444,8 @@ def start_seedgen(
     shared_file = rt.share(harness_filename)
     if shared_file is None:
         print(
-            f"[-] Error: Failed to require the harness source code file {harness_filename} from OSS-Fuzz docker container"
+            f"[-] Error: Failed to require the harness source code file {
+                harness_filename} from OSS-Fuzz docker container"
         )
         return
     with open(os.path.join(shared_folder, shared_file), "r") as f:
@@ -455,7 +457,8 @@ def start_seedgen(
     graph.add_node("agent_generation_retry", node_agent_generation_retry)
     graph.add_node("agent_suggestions", node_agent_suggestions)
     graph.add_node("system_fetch_code", node_system_fetch_code)
-    graph.add_node("system_run_generated_script", node_system_run_generated_script)
+    graph.add_node("system_run_generated_script",
+                   node_system_run_generated_script)
     graph.add_node("system_evaluate_coverage", node_system_evaluate_coverage)
 
     graph.add_edge(START, "agent_generation")
@@ -477,7 +480,8 @@ def start_seedgen(
     )
     graph.add_edge("system_evaluate_coverage", "agent_suggestions")
     graph.add_conditional_edges(
-        "agent_suggestions", edge_should_stop, {True: END, False: "agent_generation"}
+        "agent_suggestions", edge_should_stop, {
+            True: END, False: "agent_generation"}
     )
 
     app = graph.compile()
@@ -531,7 +535,8 @@ def start_seedgen(
         }
 
         with open(
-            f"oss-fuzz/build/corpus/seedgen/{project_name}/{harness_binary}.json",
+            f"oss-fuzz/build/corpus/seedgen/{
+                project_name}/{harness_binary}.json",
             "w",
         ) as f:
             f.write(json.dumps(profile))
@@ -539,7 +544,8 @@ def start_seedgen(
     for seed_file in final_state["generated_seeds"]:
         shutil.copy(
             f"{seeds_folder}/{seed_file}",
-            f"oss-fuzz/build/corpus/seedgen/{project_name}/{harness_binary}/{seed_file}",
+            f"oss-fuzz/build/corpus/seedgen/{
+                project_name}/{harness_binary}/{seed_file}",
         )
 
     rt.close()

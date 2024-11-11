@@ -47,6 +47,7 @@ def run_project(project_name):
         "/out": f"{project_dir}/out",
         "/shared": f"{project_dir}/shared",
         "/getcov": oss_fuzz.get_prebuilt_binary_path("getcov"),
+        "/seedd": oss_fuzz.get_prebuilt_binary_path("seedd"),
     }
     mount_commands = list(
         itertools.chain.from_iterable(

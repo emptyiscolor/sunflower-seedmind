@@ -27,5 +27,5 @@ clean:
 proto:
 	protoc -I. --go_out=. seedd.proto
 	protoc -I. --go-grpc_out=. seedd.proto
-	python3 -m grpc_tools.protoc -I. --python_out=seedgen --grpc_python_out=seedgen --mypy_out=seedgen seedd.proto
-	sed -i 's/import seedd_pb2 as seedd__pb2/from . import seedd_pb2 as seedd__pb2/' seedgen/seedd_pb2_grpc.py
+	python3 -m grpc_tools.protoc -I. --python_out=seedgen2/protobuf --grpc_python_out=seedgen2/protobuf --mypy_out=seedgen2/protobuf seedd.proto
+	sed -i 's/import seedd_pb2 as seedd__pb2/from . import seedd_pb2 as seedd__pb2/' seedgen2/protobuf/seedd_pb2_grpc.py

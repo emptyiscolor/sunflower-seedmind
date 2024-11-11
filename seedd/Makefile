@@ -3,7 +3,7 @@ GOBUILD = $(GOCMD) build -buildvcs=false
 GOCLEAN = $(GOCMD) clean
 GOGET = $(GOCMD) get
 
-BINARY_NAME = seedgen-injected
+BINARY_NAME = seedd
 BUILD_DIR = bin
 
 all: deps build
@@ -11,10 +11,10 @@ all: deps build
 deps:
 	$(GOGET) ./...
 
-build: seedgen-injected
+build: seedd
 
-seedgen-injected:
-	CGO_ENABLED=0 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/seedgen-injected
+seedd:
+	CGO_ENABLED=0 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/seedd
 
 clean:
 	$(GOCLEAN)
