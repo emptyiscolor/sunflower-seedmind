@@ -27,6 +27,18 @@ func (s *GetRegionSourceService) GetRegionSource(ctx context.Context, req *runti
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
 
+	// If no positions provided, use 0 values to indicate whole file should be returned
+	if req.StartLine == 0 && req.StartColumn == 0 && req.EndLine == 0 && req.EndColumn == 0 {
+		content, err := os.ReadFile(req.Filepath)
+		if err != nil {
+			log.Printf("Error reading file: %v", err)
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+		return &runtime.GetRegionSourceResponse{
+			Source: string(content),
+		}, nil
+	}
+
 	source, err := getRegionSource(req.Filepath, req.StartLine, req.StartColumn, req.EndLine, req.EndColumn)
 	if err != nil {
 		log.Printf("Error getting region source: %v", err)

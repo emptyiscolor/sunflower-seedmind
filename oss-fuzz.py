@@ -12,8 +12,6 @@ import shutil
 
 from seedgen2.seedgen import SeedGenAgent
 
-# from seedgen import source, workflow
-
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -279,6 +277,7 @@ def main():
     root = args.root
     max_level = args.level
 
+    os.makedirs(".tmp", exist_ok=True)
     try:
         project_yaml_path = validate_environment(root, project_name)
         project_config = load_project_config(project_yaml_path)
@@ -296,7 +295,8 @@ def main():
             # get ip address of the seedd container, the container id is container_id
             ip_addr = subprocess.check_output(
                 ["docker", "inspect", "-f", "{{.NetworkSettings.IPAddress}}", container_id]).decode().strip()
-            agent = SeedGenAgent(project_dir, ip_addr, harness_binary)
+            agent = SeedGenAgent(project_dir, ip_addr,
+                                 project_name, harness_binary)
             agent.run()
     except (FileNotFoundError, ValueError) as e:
         print(f"[-] Error: {e}", file=sys.stderr)
@@ -307,5 +307,4 @@ def main():
 
 
 if __name__ == "__main__":
-    os.makedirs(".tmp", exist_ok=True)
     main()

@@ -2,25 +2,29 @@
 
 ## Overview
 
-SeedGen2 is a framework designed to generate initial seeds for OSS-Fuzz, enhancing the effectiveness of fuzzing. By leveraging the capabilities of a Large Language Model (LLM), SeedGen2 can create valid seeds and improve them using harness and coverage information.
-
-## Why SeedGen2?
-
-- **Initial Seeds**: Crucial for effective fuzzing.
-- **LLM Capabilities**: Utilizes extensive knowledge of file types and code understanding to generate and enhance seeds.
-- **Harness and Coverage**: Leverages harness and coverage information to refine seeds.
+SeedGen2 is a framework designed to generate initial seeds for OSS-Fuzz, enhancing the effectiveness of fuzzing. By leveraging the capabilities of large language models, SeedGen2 can create valid seeds and improve them using harness and coverage information.
 
 ## Agent
 
-SeedGen2 employs multiple agents to effectively generate seeds. It analyzes project harnesses, documentation, dictionaries (string literals in the program), and source code, utilizing dynamic code coverage and call relationships to facilitate seed generation.
+SeedGen2 utilizes a variety of agents to generate seeds by analyzing both static and dynamic project information. This includes:
 
-SeedGen2 is designed to be flexible and extensible, allowing for the integration of additional agents to further enhance its capabilities.
+- Project harnesses code
+- Dictionaries (string literals within the program)
+- Documentation
+- Source code
+- Dynamic code coverage
+- Call relationships
+- Predicates
+
+These elements collectively aid in the seed generation process.
+
+SeedGen2 is built to be flexible and extensible, enabling the integration of additional agents to further enhance its functionality.
 
 ## Architecture
 
 SeedGen2 consists of two main components:
-1. **Lightweight Runtime**: Compiles and runs the fuzzing harness within an OSS-Fuzz Docker container, collecting dynamic information.
-2. **LLM Agent**: Capable of self-reflection and guided by a state machine to ensure tasks are managed effectively and LLM errors are preemptively fixed.
+1. **Lightweight Runtime `SeedD`**: Runs the fuzzing harness within an OSS-Fuzz Docker container, collecting dynamic information.
+2. **LLM Agents**: Capable of self-reflection and guided by a state machine to ensure tasks are managed effectively and LLM errors are preemptively fixed.
 
 ## Getting Started
 
@@ -28,7 +32,7 @@ SeedGen2 consists of two main components:
 - Docker
 - Python 3.x
 
-### Steps
+## Usage
 
 1. **Build the Tool**
    ```shell
@@ -42,12 +46,10 @@ SeedGen2 consists of two main components:
    - **Project Name**: Directory name in `oss-fuzz/projects/`, e.g., `libxml2`.
    - **Harness Name**: Executable file in the `/out` folder after building the project.
 
-## Usage
-
 ### Example
-To run SeedGen2 for the `libxml2` project with the `xmlreader` harness:
+To run SeedGen2 for the `libxml2` project with the `xml` harness:
 ```shell
-python3 oss-fuzz.py libxml2 xmlreader
+python3 oss-fuzz.py libxml2 xml
 ```
 
 ## Author
