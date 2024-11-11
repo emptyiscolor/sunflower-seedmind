@@ -1,7 +1,5 @@
 # SeedGen2
 
-![](SeedGen.png)
-
 ## Overview
 
 SeedGen2 is a framework designed to generate initial seeds for OSS-Fuzz, enhancing the effectiveness of fuzzing. By leveraging the capabilities of a Large Language Model (LLM), SeedGen2 can create valid seeds and improve them using harness and coverage information.
@@ -12,10 +10,16 @@ SeedGen2 is a framework designed to generate initial seeds for OSS-Fuzz, enhanci
 - **LLM Capabilities**: Utilizes extensive knowledge of file types and code understanding to generate and enhance seeds.
 - **Harness and Coverage**: Leverages harness and coverage information to refine seeds.
 
+## Agent
+
+SeedGen2 employs multiple agents to effectively generate seeds. It analyzes project harnesses, documentation, dictionaries (string literals in the program), and source code, utilizing dynamic code coverage and call relationships to facilitate seed generation.
+
+SeedGen2 is designed to be flexible and extensible, allowing for the integration of additional agents to further enhance its capabilities.
+
 ## Architecture
 
 SeedGen2 consists of two main components:
-1. **Lightweight Runtime**: Compiles and runs the fuzzing harness within an OSS-Fuzz Docker container, collecting coverage information.
+1. **Lightweight Runtime**: Compiles and runs the fuzzing harness within an OSS-Fuzz Docker container, collecting dynamic information.
 2. **LLM Agent**: Capable of self-reflection and guided by a state machine to ensure tasks are managed effectively and LLM errors are preemptively fixed.
 
 ## Getting Started
