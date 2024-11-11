@@ -11,7 +11,7 @@ from typing import TypedDict, Annotated
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import HumanMessage, AnyMessage
-from agent.workflow import SeedGen2KnowledgeableModel, SeedGen2GenerativeModel
+from seedgen2.agent.presets import SeedGen2KnowledgeableModel
 import json
 
 

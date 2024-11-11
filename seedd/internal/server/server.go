@@ -21,6 +21,7 @@ type server struct {
 	runSeedsService        *service.RunSeedsService
 	getRegionSourceService *service.GetRegionSourceService
 	getCallGraphService    *service.CallGraphService
+	getFunctionsService    *service.GetFunctionsService
 }
 
 func newServer() *server {
@@ -28,6 +29,7 @@ func newServer() *server {
 		runSeedsService:        service.NewRunSeedsService(),
 		getRegionSourceService: service.NewGetRegionSourceService(),
 		getCallGraphService:    service.NewCallGraphService(),
+		getFunctionsService:    service.NewGetFunctionsService(),
 	}
 }
 
@@ -42,6 +44,15 @@ func (s *server) GetRegionSource(ctx context.Context, req *runtime.GetRegionSour
 
 func (s *server) GetCallGraph(ctx context.Context, req *runtime.GetCallGraphRequest) (*runtime.GetCallGraphResponse, error) {
 	return s.getCallGraphService.GetCallGraph(ctx, req)
+}
+
+// UNIMPLEMENTED
+// func (s *server) ExtractFunctionSource(ctx context.Context, req *runtime.ExtractFunctionSourceRequest) (*runtime.ExtractFunctionSourceResponse, error) {
+// 	return nil, nil
+// }
+
+func (s *server) GetFunctions(ctx context.Context, req *runtime.GetFunctionsRequest) (*runtime.GetFunctionsResponse, error) {
+	return s.getFunctionsService.GetFunctions(ctx, req)
 }
 
 func Serve() {

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bseedd.proto\x12\x05SeedD\"=\n\x0fRunSeedsRequest\x12\x16\n\x0eharness_binary\x18\x01 \x01(\t\x12\x12\n\nseeds_path\x18\x02 \x03(\t\"$\n\x10RunSeedsResponse\x12\x10\n\x08\x63overage\x18\x01 \x01(\t\"z\n\x16GetRegionSourceRequest\x12\x10\n\x08\x66ilepath\x18\x01 \x01(\t\x12\x12\n\nstart_line\x18\x02 \x01(\x04\x12\x14\n\x0cstart_column\x18\x03 \x01(\x04\x12\x10\n\x08\x65nd_line\x18\x04 \x01(\x04\x12\x12\n\nend_column\x18\x05 \x01(\x04\")\n\x17GetRegionSourceResponse\x12\x0e\n\x06source\x18\x01 \x01(\t\"e\n\x1c\x45xtractFunctionSourceRequest\x12\x10\n\x08\x66ilepath\x18\x01 \x01(\t\x12\x0e\n\x04line\x18\x02 \x01(\x04H\x00\x12\x17\n\rfunction_name\x18\x03 \x01(\tH\x00\x42\n\n\x08location\"/\n\x1d\x45xtractFunctionSourceResponse\x12\x0e\n\x06source\x18\x01 \x01(\t\"\x15\n\x13GetCallGraphRequest\"*\n\x14GetCallGraphResponse\x12\x12\n\ncall_graph\x18\x01 \x01(\t2\xc3\x02\n\x05SeedD\x12;\n\x08RunSeeds\x12\x16.SeedD.RunSeedsRequest\x1a\x17.SeedD.RunSeedsResponse\x12P\n\x0fGetRegionSource\x12\x1d.SeedD.GetRegionSourceRequest\x1a\x1e.SeedD.GetRegionSourceResponse\x12\x62\n\x15\x45xtractFunctionSource\x12#.SeedD.ExtractFunctionSourceRequest\x1a$.SeedD.ExtractFunctionSourceResponse\x12G\n\x0cGetCallGraph\x12\x1a.SeedD.GetCallGraphRequest\x1a\x1b.SeedD.GetCallGraphResponseB\x18Z\x16seedd/internal/runtimeb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bseedd.proto\x12\x05SeedD\"=\n\x0fRunSeedsRequest\x12\x16\n\x0eharness_binary\x18\x01 \x01(\t\x12\x12\n\nseeds_path\x18\x02 \x03(\t\"$\n\x10RunSeedsResponse\x12\x10\n\x08\x63overage\x18\x01 \x01(\t\"z\n\x16GetRegionSourceRequest\x12\x10\n\x08\x66ilepath\x18\x01 \x01(\t\x12\x12\n\nstart_line\x18\x02 \x01(\x04\x12\x14\n\x0cstart_column\x18\x03 \x01(\x04\x12\x10\n\x08\x65nd_line\x18\x04 \x01(\x04\x12\x12\n\nend_column\x18\x05 \x01(\x04\")\n\x17GetRegionSourceResponse\x12\x0e\n\x06source\x18\x01 \x01(\t\"e\n\x1c\x45xtractFunctionSourceRequest\x12\x10\n\x08\x66ilepath\x18\x01 \x01(\t\x12\x0e\n\x04line\x18\x02 \x01(\x04H\x00\x12\x17\n\rfunction_name\x18\x03 \x01(\tH\x00\x42\n\n\x08location\"/\n\x1d\x45xtractFunctionSourceResponse\x12\x0e\n\x06source\x18\x01 \x01(\t\"\x15\n\x13GetCallGraphRequest\"*\n\x14GetCallGraphResponse\x12\x12\n\ncall_graph\x18\x01 \x01(\t\"-\n\x13GetFunctionsRequest\x12\x16\n\x0eharness_binary\x18\x01 \x01(\t\")\n\x14GetFunctionsResponse\x12\x11\n\tfunctions\x18\x01 \x01(\t2\x8c\x03\n\x05SeedD\x12;\n\x08RunSeeds\x12\x16.SeedD.RunSeedsRequest\x1a\x17.SeedD.RunSeedsResponse\x12P\n\x0fGetRegionSource\x12\x1d.SeedD.GetRegionSourceRequest\x1a\x1e.SeedD.GetRegionSourceResponse\x12\x62\n\x15\x45xtractFunctionSource\x12#.SeedD.ExtractFunctionSourceRequest\x1a$.SeedD.ExtractFunctionSourceResponse\x12G\n\x0cGetCallGraph\x12\x1a.SeedD.GetCallGraphRequest\x1a\x1b.SeedD.GetCallGraphResponse\x12G\n\x0cGetFunctions\x12\x1a.SeedD.GetFunctionsRequest\x1a\x1b.SeedD.GetFunctionsResponseB\x18Z\x16seedd/internal/runtimeb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -48,6 +48,10 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_GETCALLGRAPHREQUEST']._serialized_end=463
   _globals['_GETCALLGRAPHRESPONSE']._serialized_start=465
   _globals['_GETCALLGRAPHRESPONSE']._serialized_end=507
-  _globals['_SEEDD']._serialized_start=510
-  _globals['_SEEDD']._serialized_end=833
+  _globals['_GETFUNCTIONSREQUEST']._serialized_start=509
+  _globals['_GETFUNCTIONSREQUEST']._serialized_end=554
+  _globals['_GETFUNCTIONSRESPONSE']._serialized_start=556
+  _globals['_GETFUNCTIONSRESPONSE']._serialized_end=597
+  _globals['_SEEDD']._serialized_start=600
+  _globals['_SEEDD']._serialized_end=996
 # @@protoc_insertion_point(module_scope)

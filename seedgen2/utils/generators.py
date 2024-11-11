@@ -3,7 +3,7 @@
 
 import os
 import subprocess
-from utils.singleton import singleton
+from seedgen2.utils.singleton import singleton
 
 
 class GeneratorRunResult:

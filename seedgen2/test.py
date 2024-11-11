@@ -1,3 +1,4 @@
+from utils.functions import parse_functions
 from utils.grpc import SeedD
 from utils.coverage import parse_partially_covered_functions
 from utils.callgraph import build_graph_from_json, visualize_graph
@@ -8,28 +9,33 @@ from agent.graphs.generate import GRAPH_generate
 
 seedd = SeedD("172.17.0.2")
 
-resp = seedd.get_region_source(
-    filepath="/src/libxml2/fuzz/xml.c",
-    start_line=1,
-    start_column=1,
-    end_line=103,
-    end_column=2,
+resp = seedd.get_functions(
+    harness_binary="/out/xml",
 )
+print(parse_functions(resp.functions))
 
-store = SeedGeneratorStore()
-store.set_result_dir(".tmp/seedgen2")
+# resp = seedd.get_region_source(
+#     filepath="/src/libxml2/fuzz/xml.c",
+#     start_line=1,
+#     start_column=1,
+#     end_line=103,
+#     end_column=2,
+# )
 
-result = GRAPH_filetype(
-    harness_source_code=resp.source,
-    harness_file_name="xml.c",
-    project_name="libxml2",
-)
+# store = SeedGeneratorStore()
+# store.set_result_dir(".tmp/seedgen2")
 
-GRAPH_generate(
-    harness_code=resp.source,
-    file_type=result.get("file_type"),
-    feature=result.get("features")[0],
-)
+# result = GRAPH_filetype(
+#     harness_source_code=resp.source,
+#     harness_file_name="xml.c",
+#     project_name="libxml2",
+# )
+
+# GRAPH_generate(
+#     harness_code=resp.source,
+#     file_type=result.get("file_type"),
+#     feature=result.get("features")[0],
+# )
 
 
 # resp = seedd.run_seeds(

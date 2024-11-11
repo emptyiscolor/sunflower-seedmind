@@ -3,8 +3,8 @@ from langgraph.graph.message import add_messages
 from langchain_core.messages import HumanMessage
 from typing import TypedDict, Annotated
 from langgraph.graph import StateGraph, START, END
-from agent.workflow import SeedGen2GenerativeModel
-from utils.generators import SeedGeneratorStore
+from seedgen2.agent.presets import SeedGen2GenerativeModel
+from seedgen2.utils.generators import SeedGeneratorStore
 
 
 class GenerateState(TypedDict):

@@ -54,6 +54,11 @@ class SeedDStub(object):
                 request_serializer=seedd__pb2.GetCallGraphRequest.SerializeToString,
                 response_deserializer=seedd__pb2.GetCallGraphResponse.FromString,
                 _registered_method=True)
+        self.GetFunctions = channel.unary_unary(
+                '/SeedD.SeedD/GetFunctions',
+                request_serializer=seedd__pb2.GetFunctionsRequest.SerializeToString,
+                response_deserializer=seedd__pb2.GetFunctionsResponse.FromString,
+                _registered_method=True)
 
 
 class SeedDServicer(object):
@@ -83,6 +88,12 @@ class SeedDServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetFunctions(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SeedDServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -105,6 +116,11 @@ def add_SeedDServicer_to_server(servicer, server):
                     servicer.GetCallGraph,
                     request_deserializer=seedd__pb2.GetCallGraphRequest.FromString,
                     response_serializer=seedd__pb2.GetCallGraphResponse.SerializeToString,
+            ),
+            'GetFunctions': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetFunctions,
+                    request_deserializer=seedd__pb2.GetFunctionsRequest.FromString,
+                    response_serializer=seedd__pb2.GetFunctionsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -215,6 +231,33 @@ class SeedD(object):
             '/SeedD.SeedD/GetCallGraph',
             seedd__pb2.GetCallGraphRequest.SerializeToString,
             seedd__pb2.GetCallGraphResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetFunctions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/SeedD.SeedD/GetFunctions',
+            seedd__pb2.GetFunctionsRequest.SerializeToString,
+            seedd__pb2.GetFunctionsResponse.FromString,
             options,
             channel_credentials,
             insecure,

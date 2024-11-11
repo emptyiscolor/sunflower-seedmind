@@ -161,3 +161,34 @@ class GetCallGraphResponse(google.protobuf.message.Message):
     def ClearField(self, field_name: typing.Literal["call_graph", b"call_graph"]) -> None: ...
 
 global___GetCallGraphResponse = GetCallGraphResponse
+
+@typing.final
+class GetFunctionsRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    HARNESS_BINARY_FIELD_NUMBER: builtins.int
+    harness_binary: builtins.str
+    def __init__(
+        self,
+        *,
+        harness_binary: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["harness_binary", b"harness_binary"]) -> None: ...
+
+global___GetFunctionsRequest = GetFunctionsRequest
+
+@typing.final
+class GetFunctionsResponse(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    FUNCTIONS_FIELD_NUMBER: builtins.int
+    functions: builtins.str
+    """functions in JSON format"""
+    def __init__(
+        self,
+        *,
+        functions: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["functions", b"functions"]) -> None: ...
+
+global___GetFunctionsResponse = GetFunctionsResponse

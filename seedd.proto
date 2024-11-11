@@ -10,6 +10,7 @@ service SeedD {
   rpc ExtractFunctionSource(ExtractFunctionSourceRequest)
       returns (ExtractFunctionSourceResponse);
   rpc GetCallGraph(GetCallGraphRequest) returns (GetCallGraphResponse);
+  rpc GetFunctions(GetFunctionsRequest) returns (GetFunctionsResponse);
 }
 
 message RunSeedsRequest {
@@ -51,4 +52,12 @@ message GetCallGraphRequest {
 
 message GetCallGraphResponse {
   string call_graph = 1; // call graph in JSON format
+}
+
+message GetFunctionsRequest {
+  string harness_binary = 1;
+}
+
+message GetFunctionsResponse {
+  string functions = 1; // functions in JSON format
 }

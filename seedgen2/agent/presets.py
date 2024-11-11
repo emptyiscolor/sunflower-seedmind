@@ -4,7 +4,7 @@
 # Connect each subgraph to the main workflow
 
 from langchain_openai import ChatOpenAI
-from utils.singleton import singleton
+from seedgen2.utils.singleton import singleton
 
 
 LITELLM_BASE_URL = "https://litellm.mudd.cc"
@@ -40,11 +40,3 @@ class SeedGen2RefinerModel:
             model="qwen", base_url=LITELLM_BASE_URL, api_key=LITELLM_KEY)
 
         self.json_model = None  # qwen does not support json mode
-
-
-def build_main_workflow():
-    pass
-
-
-def seedgen2():
-    pass

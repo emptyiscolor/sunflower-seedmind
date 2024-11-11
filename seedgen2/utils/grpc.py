@@ -8,8 +8,8 @@ import grpc_health.v1.health_pb2 as health_pb2
 import grpc_health.v1.health_pb2_grpc as health_pb2_grpc
 from typing import List, Optional
 
-from protobuf import seedd_pb2
-from protobuf import seedd_pb2_grpc
+from seedgen2.protobuf import seedd_pb2
+from seedgen2.protobuf import seedd_pb2_grpc
 
 DEFAULT_PORT = 9002
 DEFAULT_TIMEOUT = 30  # seconds
@@ -116,3 +116,9 @@ class SeedD:
         """Gets the call graph for a harness."""
         request = seedd_pb2.GetCallGraphRequest()
         return self.stub.GetCallGraph(request, compression=grpc.Compression.Gzip)
+
+    @grpc_call
+    def get_functions(self, harness_binary: str) -> seedd_pb2.GetFunctionsResponse:
+        """Gets the functions for a harness."""
+        request = seedd_pb2.GetFunctionsRequest(harness_binary=harness_binary)
+        return self.stub.GetFunctions(request, compression=grpc.Compression.Gzip)

@@ -23,6 +23,7 @@ const (
 	SeedD_GetRegionSource_FullMethodName       = "/SeedD.SeedD/GetRegionSource"
 	SeedD_ExtractFunctionSource_FullMethodName = "/SeedD.SeedD/ExtractFunctionSource"
 	SeedD_GetCallGraph_FullMethodName          = "/SeedD.SeedD/GetCallGraph"
+	SeedD_GetFunctions_FullMethodName          = "/SeedD.SeedD/GetFunctions"
 )
 
 // SeedDClient is the client API for SeedD service.
@@ -33,6 +34,7 @@ type SeedDClient interface {
 	GetRegionSource(ctx context.Context, in *GetRegionSourceRequest, opts ...grpc.CallOption) (*GetRegionSourceResponse, error)
 	ExtractFunctionSource(ctx context.Context, in *ExtractFunctionSourceRequest, opts ...grpc.CallOption) (*ExtractFunctionSourceResponse, error)
 	GetCallGraph(ctx context.Context, in *GetCallGraphRequest, opts ...grpc.CallOption) (*GetCallGraphResponse, error)
+	GetFunctions(ctx context.Context, in *GetFunctionsRequest, opts ...grpc.CallOption) (*GetFunctionsResponse, error)
 }
 
 type seedDClient struct {
@@ -83,6 +85,16 @@ func (c *seedDClient) GetCallGraph(ctx context.Context, in *GetCallGraphRequest,
 	return out, nil
 }
 
+func (c *seedDClient) GetFunctions(ctx context.Context, in *GetFunctionsRequest, opts ...grpc.CallOption) (*GetFunctionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetFunctionsResponse)
+	err := c.cc.Invoke(ctx, SeedD_GetFunctions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SeedDServer is the server API for SeedD service.
 // All implementations must embed UnimplementedSeedDServer
 // for forward compatibility.
@@ -91,6 +103,7 @@ type SeedDServer interface {
 	GetRegionSource(context.Context, *GetRegionSourceRequest) (*GetRegionSourceResponse, error)
 	ExtractFunctionSource(context.Context, *ExtractFunctionSourceRequest) (*ExtractFunctionSourceResponse, error)
 	GetCallGraph(context.Context, *GetCallGraphRequest) (*GetCallGraphResponse, error)
+	GetFunctions(context.Context, *GetFunctionsRequest) (*GetFunctionsResponse, error)
 	mustEmbedUnimplementedSeedDServer()
 }
 
@@ -112,6 +125,9 @@ func (UnimplementedSeedDServer) ExtractFunctionSource(context.Context, *ExtractF
 }
 func (UnimplementedSeedDServer) GetCallGraph(context.Context, *GetCallGraphRequest) (*GetCallGraphResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetCallGraph not implemented")
+}
+func (UnimplementedSeedDServer) GetFunctions(context.Context, *GetFunctionsRequest) (*GetFunctionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetFunctions not implemented")
 }
 func (UnimplementedSeedDServer) mustEmbedUnimplementedSeedDServer() {}
 func (UnimplementedSeedDServer) testEmbeddedByValue()               {}
@@ -206,6 +222,24 @@ func _SeedD_GetCallGraph_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SeedD_GetFunctions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFunctionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeedDServer).GetFunctions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeedD_GetFunctions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeedDServer).GetFunctions(ctx, req.(*GetFunctionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SeedD_ServiceDesc is the grpc.ServiceDesc for SeedD service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -228,6 +262,10 @@ var SeedD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetCallGraph",
 			Handler:    _SeedD_GetCallGraph_Handler,
+		},
+		{
+			MethodName: "GetFunctions",
+			Handler:    _SeedD_GetFunctions_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

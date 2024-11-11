@@ -10,6 +10,8 @@ import yaml
 import subprocess
 import shutil
 
+from seedgen2.seedgen import SeedGenAgent
+
 # from seedgen import source, workflow
 
 
@@ -256,7 +258,7 @@ def run_project(root, project_name, project_config) -> tuple[str, str]:
     )
     result = subprocess.run(run_command, check=True, stdout=subprocess.PIPE)
     container_id = result.stdout.decode().strip()
-    return os.path.join(project_name, str(runtime_id)), container_id
+    return project_dir, container_id
 
 
 def get_prebuilt_binary_path(binary_name):
@@ -269,42 +271,41 @@ def get_prebuilt_binary_path(binary_name):
     return binary_path
 
 
-# def main():
-#     args = parse_args()
-#     project_name = args.project_name
-#     harness_binaries = args.harness_binaries
-#     budget = args.budget
-#     root = args.root
-#     max_level = args.level
+def main():
+    args = parse_args()
+    project_name = args.project_name
+    harness_binaries = args.harness_binaries
+    budget = args.budget
+    root = args.root
+    max_level = args.level
 
-#     try:
-#         project_yaml_path = validate_environment(root, project_name)
-#         project_config = load_project_config(project_yaml_path)
-#         print_project_info(project_name, project_config)
+    try:
+        project_yaml_path = validate_environment(root, project_name)
+        project_config = load_project_config(project_yaml_path)
+        print_project_info(project_name, project_config)
 
-#         # Compile the project
-#         compile_project(root, project_name, project_config)
+        # Compile the project
+        compile_project(root, project_name, project_config)
 
-#         # Start the daemon
-#         runtime_id, container_id = run_project(
-#             root, project_name, project_config)
+        # Start the daemon
+        project_dir, container_id = run_project(
+            root, project_name, project_config)
 
-#         # Start the agent
-#         for harness_binary in harness_binaries:
-#             workflow.start_seedgen(
-#                 runtime_id, container_id, project_name, harness_binary, budget, max_level
-#             )
-#     except (FileNotFoundError, ValueError) as e:
-#         print(f"[-] Error: {e}", file=sys.stderr)
-#         sys.exit(1)
-#     finally:
-#         if "container_id" in locals():
-#             subprocess.run(["docker", "stop", container_id], check=True)
+        # Start the agent
+        for harness_binary in harness_binaries:
+            # get ip address of the seedd container, the container id is container_id
+            ip_addr = subprocess.check_output(
+                ["docker", "inspect", "-f", "{{.NetworkSettings.IPAddress}}", container_id]).decode().strip()
+            agent = SeedGenAgent(project_dir, ip_addr, harness_binary)
+            agent.run()
+    except (FileNotFoundError, ValueError) as e:
+        print(f"[-] Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        if "container_id" in locals():
+            subprocess.run(["docker", "stop", container_id], check=True)
 
 
-# if __name__ == "__main__":
-#     os.makedirs(".tmp", exist_ok=True)
-#     # Path to libclang.so, run the script in dev container!
-#     LIBCLANG_PATH = "/usr/lib/llvm-18/lib/libclang.so"
-#     source.set_libclang_path(LIBCLANG_PATH)
-#     main()
+if __name__ == "__main__":
+    os.makedirs(".tmp", exist_ok=True)
+    main()
