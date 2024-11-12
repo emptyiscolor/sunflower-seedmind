@@ -303,6 +303,7 @@ def main():
         sys.exit(1)
     finally:
         if "container_id" in locals():
+            print(f"[-] Stopping container {container_id}")
             subprocess.run(["docker", "stop", container_id], check=True)
 
 

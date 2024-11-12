@@ -4,21 +4,23 @@
 import os
 import subprocess
 from seedgen2.utils.singleton import singleton
+from dataclasses import dataclass
+from typing import List, Optional
 
 
+@dataclass
 class GeneratorRunResult:
-    def __init__(self, success: bool, error_message: str | None, seed_paths: list[str] | None):
-        self.success = success
-        self.error_message = error_message
-        self.seed_paths = seed_paths
+    success: bool
+    error_message: Optional[str]
+    seed_paths: Optional[List[str]]
 
-    def get_seed_paths(self) -> list[str] | None:
+    def get_seed_paths(self) -> Optional[List[str]]:
         return self.seed_paths
 
     def is_success(self) -> bool:
         return self.success
 
-    def get_error_message(self) -> str | None:
+    def get_error_message(self) -> Optional[str]:
         return self.error_message
 
 
@@ -37,6 +39,9 @@ class SeedGeneratorStore:
 
     def set_num_seeds(self, num_seeds: int):
         self.num_seeds = num_seeds
+    
+    def get_generator(self, generator_id: int) -> str:
+        return self.generators[generator_id]
 
     def new_generator(self, generator_source_code: str) -> int:
         if self.result_dir is None:

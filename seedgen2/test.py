@@ -4,7 +4,7 @@ from utils.coverage import parse_partially_covered_functions
 from utils.callgraph import build_graph_from_json, visualize_graph
 from utils.generators import SeedGeneratorStore
 
-from agent.graphs.filetype import GRAPH_filetype
+from agent.graphs.filetype import get_filetype
 from agent.graphs.generate import GRAPH_generate
 
 seedd = SeedD("172.17.0.2")

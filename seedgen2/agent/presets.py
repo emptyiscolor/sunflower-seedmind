@@ -24,9 +24,18 @@ class SeedGen2KnowledgeableModel:
 
 @singleton
 class SeedGen2GenerativeModel:
+    # def __init__(self):
+    #     self.model = ChatOpenAI(
+    #         model="o1-preview", base_url=LITELLM_BASE_URL, api_key=LITELLM_KEY)
+
+    #     self.json_model = self.model.bind(
+    #         response_format={"type": "json_object"}
+    #     )
+
+    # FOR DEBUG: I replaced it with a faster model gpt-4o
     def __init__(self):
         self.model = ChatOpenAI(
-            model="o1-preview", base_url=LITELLM_BASE_URL, api_key=LITELLM_KEY)
+            model="gpt-4o", base_url=LITELLM_BASE_URL, api_key=LITELLM_KEY)
 
         self.json_model = self.model.bind(
             response_format={"type": "json_object"}

@@ -50,6 +50,11 @@ func (s *RunSeedsService) RunSeeds(ctx context.Context, req *runtime.RunSeedsReq
 }
 
 func validatePaths(harnessBinary string, seedsPaths []string) error {
+	// Check if harness binary is an absolute path
+	if !filepath.IsAbs(harnessBinary) {
+		harnessBinary = filepath.Join(ArtifactDir, harnessBinary)
+	}
+
 	// Check if harness binary exists
 	if _, err := os.Stat(harnessBinary); os.IsNotExist(err) {
 		log.Printf("Error: harness binary not found at path: %s", harnessBinary)

@@ -1,18 +1,19 @@
 # Seed Generator 2
 # Author: Wenxuan Shi <wenxuan.shi@northwestern.edu>
-import logging
-
-from seedgen2.utils.functions import get_functions
-from seedgen2.utils.generators import SeedGeneratorStore
+from seedgen2.agent.graphs.filetype import generate_based_on_filetype, get_filetype
 from seedgen2.utils.grpc import SeedD
+from seedgen2.utils.generators import SeedGeneratorStore
+from seedgen2.utils.functions import get_functions
+import logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
 # subgraphs
-from seedgen2.agent.graphs.filetype import GRAPH_filetype
-from seedgen2.agent.graphs.generate import GRAPH_generate
 
 
 class SeedGenAgent:
     def __init__(self, result_dir: str, ip_addr: str, project_name: str, harness_binary: str):
-        self.seedd = SeedD(ip_addr)
+        self.seedd = SeedD(ip_addr, shared_dir=f"{result_dir}/shared")
         self.result_dir = result_dir
         self.project_name = project_name
         self.harness_binary = harness_binary
@@ -49,23 +50,18 @@ class SeedGenAgent:
 
         # generate seeds with "filetype" subgraph (only run once)
         harness_file_name = harness_file_path.split("/")[-1]
-        filetype_result = GRAPH_filetype(
+        filetype_result = get_filetype(
             harness_source_code=harness_source_code,
             harness_file_name=harness_file_name,
             project_name=self.project_name,
         )
         logging.info(f"Identified file type: {
-                     filetype_result.get('file_type')}")
-        logging.info(f"Identified features: {filetype_result.get('features')}")
+                     filetype_result.file_type}")
+        logging.info(f"Identified features: {filetype_result.features}")
 
-        for feature in filetype_result.get("features"):
-            generation_result = GRAPH_generate(
-                harness_code=harness_source_code,
-                file_type=filetype_result.get("file_type"),
-                feature=feature,
-            )
-            logging.info(f"Generated seeds with feature: {feature}")
-        
+        print(generate_based_on_filetype(self.seedd,
+              self.harness_binary, harness_source_code, filetype_result))
+
         # TODO: generate seeds with "dictionary (string literal)" subgraph
 
         # TODO: generate seeds with "code coverage" subgraph

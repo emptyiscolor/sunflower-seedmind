@@ -32,6 +32,26 @@ class PartiallyCoveredFunction:
     whole_function: Optional[CodeRegion]
 
 
+@dataclass
+class CoverageInfo:
+    covered_branches: int
+    total_branches: int
+    covered_functions: int
+    total_functions: int
+
+
+def parse_coverage(json_str: str) -> CoverageInfo:
+    response = json.loads(json_str)
+    coverage = response['coverage']
+
+    return CoverageInfo(
+        covered_branches=coverage['covered_branches'],
+        total_branches=coverage['total_branches'],
+        covered_functions=coverage['covered_functions'],
+        total_functions=coverage['total_functions'],
+    )
+
+
 def parse_partially_covered_functions(json_str: str) -> List[PartiallyCoveredFunction]:
     """Parses a JSON representation of PartiallyCoveredFunction into a Python object."""
     response = json.loads(json_str)

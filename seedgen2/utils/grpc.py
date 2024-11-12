@@ -4,6 +4,9 @@
 import functools
 import time
 import grpc
+import os
+import shutil
+import uuid
 import grpc_health.v1.health_pb2 as health_pb2
 import grpc_health.v1.health_pb2_grpc as health_pb2_grpc
 from typing import List, Optional
@@ -50,8 +53,10 @@ def grpc_call(func):
 
 
 class SeedD:
-    def __init__(self, ip_addr: str):
+    def __init__(self, ip_addr: str, shared_dir: str):
         self.ip_addr = ip_addr
+        # the directory is shared across the container and host machine
+        self.shared_dir = shared_dir
         self.channel = grpc.insecure_channel(f"{ip_addr}:{DEFAULT_PORT}")
         self.stub = seedd_pb2_grpc.SeedDStub(self.channel)
 
@@ -59,6 +64,14 @@ class SeedD:
         """Performs a health check on the gRPC server."""
         health_stub = health_pb2_grpc.HealthStub(self.channel)
         health_stub.Check(health_pb2.HealthCheckRequest())
+
+    def share_file(self, file_path: str):
+        # Generate a UUID for the file to avoid name conflicts
+        base_name, ext = os.path.splitext(os.path.basename(file_path))
+        unique_filename = f"{uuid.uuid4()}_{base_name}{ext}"
+        container_path = os.path.join("/shared", unique_filename)
+        shutil.copy(file_path, os.path.join(self.shared_dir, unique_filename))
+        return container_path
 
     @grpc_call
     def run_seeds(self, harness_binary: str, seeds_path: List[str]) -> seedd_pb2.RunSeedsResponse:
