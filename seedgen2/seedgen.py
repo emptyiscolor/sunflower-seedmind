@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from typing import List, Optional
 from pathlib import Path
 
-from seedgen2.agent.graphs.filetype import generate_based_on_filetype, get_filetype, FileTypeResult
+from seedgen2.agent.graphs.filetype import generate_based_on_filetype, get_filetype
 from seedgen2.utils.grpc import SeedD
 from seedgen2.utils.generators import SeedGeneratorStore
-from seedgen2.utils.functions import get_functions, Function
+from seedgen2.utils.functions import get_functions, FunctionInfo
 
 import logging
 logging.basicConfig(level=logging.INFO,
@@ -41,13 +41,13 @@ class SeedGenAgent:
         self.store = SeedGeneratorStore()
         self.store.set_result_dir(result_dir)
 
-    def _find_harness_function(self, functions: List[Function]) -> Optional[Function]:
+    def _find_harness_function(self, functions: List[FunctionInfo]) -> Optional[FunctionInfo]:
         return next(
             (func for func in functions if "LLVMFuzzerTestOneInput" in func.name),
             None
         )
 
-    def _get_harness_info(self, functions: List[Function]) -> HarnessInfo:
+    def _get_harness_info(self, functions: List[FunctionInfo]) -> HarnessInfo:
         harness_func = self._find_harness_function(functions)
         if not harness_func:
             raise ValueError(
