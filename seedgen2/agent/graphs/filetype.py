@@ -8,15 +8,9 @@
 # 4. if the filetype is not determined, use the generative model to write a seed generator directly.
 
 from dataclasses import dataclass
-from typing import TypedDict, Annotated
-from langgraph.graph import StateGraph, START, END
-from langgraph.graph.message import add_messages
-from langchain_core.messages import HumanMessage, AnyMessage
 from seedgen2.agent.presets import SeedGen2KnowledgeableModel
+from seedgen2.agent.seedson import JsonValidationState, build_json_validation_graph, seedson
 from seedgen2.agent.sowbot import Sowbot
-import json
-import logging
-
 from seedgen2.utils.grpc import SeedD
 
 
@@ -24,24 +18,6 @@ from seedgen2.utils.grpc import SeedD
 class FileTypeInfo:
     file_type: str
     features: list[str]
-
-
-class InitialState(TypedDict):
-    harness_source_code: str
-    harness_file_name: str
-    project_name: str
-
-    # states
-    file_type_determined: bool
-    file_type: str
-    file_type_features: list[str]
-
-    # error message
-    error_happened: bool
-    error_message: str
-
-    # chat history
-    messages: Annotated[list[AnyMessage], add_messages]
 
 
 # TODO: write a better prompt for the knowledgeable model
@@ -68,21 +44,6 @@ Here is an example of the JSON format:
 ```
 """
 
-PROMPT_rewrite_json_if_needed = """
-There is an error in the JSON object you returned. Please rewrite the JSON object.
-
-Here is the error message:
-{error_message}
-
-Here is an example of the JSON format:
-```json
-{{
-    "file_type": "jpg",
-    "features": ["Color Space", "Chroma Subsampling", "Progressive Encoding"]
-}}
-```
-"""
-
 PROMPT_generate = """
 As a professional security engineer, your task is to develop a Python script that generates a new test case file. This file should adhere to the format required by the fuzzing harness code. The script will play a crucial role in creating diverse and effective test cases for thorough security testing.
 
@@ -91,112 +52,36 @@ Write a Python script that generates a {file_type} test case file with the featu
 
 ## Fuzzing Harness Code:
 {harness_code}
-
 """
 
 
-def NODE_determine_file_type(state: InitialState):
-    knowledgeable_model = SeedGen2KnowledgeableModel().json_model
-    messages = [
-        HumanMessage(content=PROMPT_determine_file_type.format(
-            harness_source_code=state["harness_source_code"],
-            harness_file_name=state["harness_file_name"],
-            project_name=state["project_name"]
-        ))
-    ]
-
-    response = knowledgeable_model.invoke(messages)
-    messages.append(response)
-
-    return {
-        "messages": messages,
-    }
-
-
-def NODE_grab_json_from_response(state: InitialState):
-    response = state["messages"][-1].content
-    try:
-        json_obj = json.loads(response)
-        logging.info(f"[*] File type determined: {json_obj['file_type']}")
-        logging.info(f"[*] File type features: {json_obj['features']}")
-        return {
-            "file_type_determined": True,
-            "file_type": json_obj["file_type"],
-            "file_type_features": json_obj["features"],
-        }
-    except Exception as e:
-        logging.error(f"[!] Failed to parse JSON from response: {
-                      e}, response: {response}")
-        return {
-            "file_type_determined": False,
-            "error_happened": True,
-            "error_message": f"Failed to parse JSON from response: {e}",
-        }
-
-
-def NODE_rewrite_json_if_needed(state: InitialState):
-    knowledgeable_model = SeedGen2KnowledgeableModel().json_model
-    messages = [
-        HumanMessage(content=PROMPT_rewrite_json_if_needed.format(
-            error_message=state["error_message"],
-        ))
-    ]
-    messages.append(knowledgeable_model.invoke(state["messages"] + messages))
-    return {
-        "messages": messages,
-    }
-
-
-def EDGE_error_happened(state: InitialState) -> bool:
-    return state["error_happened"]
-
-
-def build_initial_graph():
-    graph_builder = StateGraph(InitialState)
-    graph_builder.add_node("node_determine_file_type",
-                           NODE_determine_file_type)
-    graph_builder.add_node("node_grab_json_from_response",
-                           NODE_grab_json_from_response)
-    graph_builder.add_node("node_rewrite_json_if_needed",
-                           NODE_rewrite_json_if_needed)
-
-    graph_builder.add_edge(START, "node_determine_file_type")
-    graph_builder.add_edge("node_determine_file_type",
-                           "node_grab_json_from_response")
-    graph_builder.add_conditional_edges(
-        "node_grab_json_from_response",
-        EDGE_error_happened,
-        {
-            True: "node_rewrite_json_if_needed",
-            False: END,
-        }
-    )
-    graph_builder.add_edge("node_rewrite_json_if_needed",
-                           "node_grab_json_from_response")
-
-    return graph_builder.compile()
-
-
 def get_filetype(harness_source_code: str, harness_file_name: str, project_name: str) -> FileTypeInfo:
-    graph = build_initial_graph()
-
-    initial_state = InitialState(
+    # Build the prompt
+    prompt = PROMPT_determine_file_type.format(
         harness_source_code=harness_source_code,
         harness_file_name=harness_file_name,
-        project_name=project_name,
-        file_type_determined=False,
-        file_type="",
-        file_type_features=[],
-        messages=[],
-        error_happened=False,
-        error_message="",
+        project_name=project_name
     )
 
-    result = graph.invoke(initial_state)
+    # Define the JSON schema
+    json_schema = {
+        "type": "object",
+        "properties": {
+            "file_type": {"type": "string"},
+            "features": {
+                "type": "array",
+                "items": {"type": "string"}
+            }
+        },
+        "required": ["file_type", "features"]
+    }
+
+    # Build the graph
+    result = seedson(prompt, json_schema)
 
     return FileTypeInfo(
-        file_type=result["file_type"],
-        features=result["file_type_features"],
+        file_type=result['file_type'],
+        features=result['features'],
     )
 
 

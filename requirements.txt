@@ -12,3 +12,4 @@ matplotlib
 networkx
 mypy-protobuf
 pytest
+jsonschema
