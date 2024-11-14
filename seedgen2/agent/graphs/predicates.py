@@ -1,6 +1,7 @@
 # Predicates subgraph of SeedGen2
 
 # Given coverage information (SeedFeedback), evaluate the predicates
+from seedgen2.agent.cot import CoT
 from seedgen2.agent.presets import SeedGen2InferModel
 from seedgen2.agent.sowbot import Sowbot
 from seedgen2.utils.callgraph import get_current_callgraph, get_ancestors, get_successors
@@ -98,7 +99,8 @@ def improve_entrance_by_predicate(seedd: SeedD, script: str, seed_feedback: Seed
     )
 
     # use a powerful inference model to flip the predicate value
-    sowbot = Sowbot(seedd, harness_binary, model=SeedGen2InferModel().model)
+    # sowbot = Sowbot(seedd, harness_binary, model=SeedGen2InferModel().model)
+    sowbot = Sowbot(seedd, harness_binary, model=CoT())
     sowbot_result = sowbot.run(prompt)
 
     # let's check if the predicate value is flipped
