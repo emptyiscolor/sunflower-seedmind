@@ -3,7 +3,7 @@
 # Given a prompt, Sowbot will output generator scripts, seeds, and seed evaluation results.
 
 from dataclasses import dataclass, field
-from typing import List, TypedDict, Annotated, Optional
+from typing import Any, List, TypedDict, Annotated, Optional
 import logging
 
 from langchain_core.messages import HumanMessage, AnyMessage
@@ -81,12 +81,13 @@ if __name__ == "__main__":
 @dataclass
 class GenerateState(TypedDict):
     """State management for the generation workflow."""
+    model: Any
     prompt: str
     messages: Annotated[list[AnyMessage], add_messages]
     error_happened: bool
     error_message: str
     generated_script_id: int
-    generator_run_result: GeneratorRunResult
+    generator_run_result: Optional[GeneratorRunResult]
 
 
 class ScriptExtractor:
@@ -109,7 +110,7 @@ class GenerationNode:
     def __call__(self, state: GenerateState):
         logging.info(f"Starting script generation for prompt: {
                      state['prompt'][:100]}...")
-        model = SeedGen2GenerativeModel().model
+        model = state['model']
         messages = [HumanMessage(content=state["prompt"])]
         response = model.invoke(messages)
 
@@ -121,6 +122,8 @@ class ScriptValidationNode:
 
     def __call__(self, state: GenerateState):
         last_response = state["messages"][-1].content
+        if isinstance(last_response, list):
+            last_response = "\n".join([str(item) for item in last_response])
         script = ScriptExtractor.extract_script(last_response)
 
         if not script:
@@ -157,7 +160,7 @@ class ErrorHandlingNode:
 
     def __call__(self, state: GenerateState):
         logging.info("Starting error correction iteration")
-        model = SeedGen2GenerativeModel().model
+        model = state['model']
         error_prompt = SowbotPrompts.HANDLE_GENERATION_ERROR.format(
             error_message=state["error_message"])
         messages = [HumanMessage(content=error_prompt)]
@@ -170,7 +173,7 @@ def EDGE_error_happened(state: GenerateState) -> bool:
     return state["error_happened"]
 
 
-def build_generate_graph() -> StateGraph:
+def build_generate_graph():
     """Builds the generation workflow graph."""
     graph_builder = StateGraph(GenerateState)
 
@@ -203,11 +206,15 @@ class SowbotResult:
 class Sowbot:
     """Main class for generating and evaluating seeds."""
 
-    def __init__(self, seedd: SeedD, harness_binary: str, enforce_requirements: bool = True, include_example: bool = True):
+    def __init__(self, seedd: SeedD, harness_binary: str, enforce_requirements: bool = True, include_example: bool = True, model=None):
         self.seedd = seedd
         self.harness_binary = harness_binary
         self.enforce_requirements = enforce_requirements
         self.include_example = include_example
+        if model is None:
+            self.model = SeedGen2GenerativeModel().model
+        else:
+            self.model = model
 
     def run(self, prompt: str) -> SowbotResult:
         """
@@ -227,6 +234,7 @@ class Sowbot:
         )
 
         initial_state = GenerateState(
+            model=self.model,
             prompt=full_prompt,
             messages=[],
             error_happened=False,

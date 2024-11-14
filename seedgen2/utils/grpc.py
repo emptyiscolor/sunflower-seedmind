@@ -9,10 +9,11 @@ import shutil
 import uuid
 import grpc_health.v1.health_pb2 as health_pb2
 import grpc_health.v1.health_pb2_grpc as health_pb2_grpc
-from typing import List, Optional
+from typing import List, Optional, cast
 
 from seedgen2.protobuf import seedd_pb2
 from seedgen2.protobuf import seedd_pb2_grpc
+import grpc.aio
 
 DEFAULT_PORT = 9002
 DEFAULT_TIMEOUT = 30  # seconds
@@ -31,19 +32,25 @@ def grpc_call(func):
                 return func(self, *args, **kwargs)
             except grpc.RpcError as rpc_error:
                 last_error = rpc_error
-                if rpc_error.code() == grpc.StatusCode.UNAVAILABLE:
+                # Cast the error to grpc.Call to satisfy type checker
+                error = rpc_error if isinstance(
+                    rpc_error, grpc.Call) else rpc_error
+                if isinstance(error, grpc.Call) and error.code() == grpc.StatusCode.UNAVAILABLE:
                     time.sleep(DEFAULT_RETRY_INTERVAL)
                     continue
                 # For other gRPC errors, raise immediately
-                if rpc_error.code() == grpc.StatusCode.INVALID_ARGUMENT:
-                    raise ValueError(
-                        "Invalid arguments provided to gRPC call") from rpc_error
-                elif rpc_error.code() == grpc.StatusCode.NOT_FOUND:
-                    raise FileNotFoundError(
-                        "Requested resource not found") from rpc_error
-                else:
-                    raise RuntimeError(
-                        f"gRPC call failed: {rpc_error.details()} (Code: {rpc_error.code().name})") from rpc_error
+                if isinstance(error, grpc.Call):
+                    if error.code() == grpc.StatusCode.INVALID_ARGUMENT:
+                        raise ValueError(
+                            "Invalid arguments provided to gRPC call") from rpc_error
+                    elif error.code() == grpc.StatusCode.NOT_FOUND:
+                        raise FileNotFoundError(
+                            "Requested resource not found") from rpc_error
+                    else:
+                        raise RuntimeError(
+                            f"gRPC call failed: {
+                                error.details()} (Code: {error.code().name})"
+                        ) from rpc_error
 
         # If we've exhausted our retries, raise the last error
         raise RuntimeError(
@@ -102,7 +109,6 @@ class SeedD:
     @grpc_call
     def extract_function_source(
         self,
-        harness_binary: str,
         filepath: str,
         line: Optional[int] = None,
         function_name: Optional[str] = None
@@ -114,13 +120,10 @@ class SeedD:
         if line and function_name:
             raise ValueError(
                 "Cannot provide both line number and function name")
-        request = seedd_pb2.ExtractFunctionSourceRequest(
-            harness_binary=harness_binary,
-            filepath=filepath
-        )
+        request = seedd_pb2.ExtractFunctionSourceRequest(filepath=filepath)
         if line:
             request.line = line
-        else:
+        elif function_name:
             request.function_name = function_name
         return self.stub.ExtractFunctionSource(request, compression=grpc.Compression.Gzip)
 

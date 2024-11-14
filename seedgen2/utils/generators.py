@@ -27,7 +27,7 @@ class GeneratorRunResult:
 @singleton
 class SeedGeneratorStore:
     def __init__(self):
-        self.result_dir = None
+        self.result_dir = ""
         self.generators: list[str] = []
         self.num_seeds = 100
 
@@ -39,12 +39,12 @@ class SeedGeneratorStore:
 
     def set_num_seeds(self, num_seeds: int):
         self.num_seeds = num_seeds
-    
+
     def get_generator(self, generator_id: int) -> str:
         return self.generators[generator_id]
 
     def new_generator(self, generator_source_code: str) -> int:
-        if self.result_dir is None:
+        if self.result_dir == "":
             raise ValueError(
                 "Result directory is not set yet. Please make sure to use `set_result_dir` at lease once before submit new generator!")
 

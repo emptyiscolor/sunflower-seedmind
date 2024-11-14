@@ -5,6 +5,8 @@ from typing import List, Optional
 from pathlib import Path
 
 from seedgen2.agent.graphs.filetype import generate_based_on_filetype, get_filetype
+from seedgen2.agent.graphs.predicates import improve_entrance_by_predicate
+from seedgen2.agent.sowbot import SowbotResult
 from seedgen2.utils.grpc import SeedD
 from seedgen2.utils.generators import SeedGeneratorStore
 from seedgen2.utils.functions import get_functions, FunctionInfo
@@ -60,7 +62,7 @@ class SeedGenAgent:
             filepath=harness_func.file_path,
             start_line=0, start_column=0,
             end_line=0, end_column=0
-        )
+        ).source
 
         return HarnessInfo(
             file_path=harness_func.file_path,
@@ -68,7 +70,7 @@ class SeedGenAgent:
             file_name=Path(harness_func.file_path).name
         )
 
-    def _generate_filetype_seeds(self, harness_info: HarnessInfo) -> None:
+    def _generate_filetype_seeds(self, harness_info: HarnessInfo) -> SowbotResult:
         filetype_result = get_filetype(
             harness_source_code=harness_info.source_code,
             harness_file_name=harness_info.file_name,
@@ -84,7 +86,7 @@ class SeedGenAgent:
             harness_info.source_code,
             filetype_result
         )
-        print(result)
+        return result
 
     def run(self) -> None:
         """Run the seed generation process."""
@@ -96,7 +98,9 @@ class SeedGenAgent:
         harness_info = self._get_harness_info(functions)
 
         # Generate seeds using different strategies
-        self._generate_filetype_seeds(harness_info)
+        result = self._generate_filetype_seeds(harness_info)
+        improve_entrance_by_predicate(
+            self.seedd, result.generator_script, result.seed_evaluation_result, functions, self.harness_binary)
 
         # TODO: generate seeds with "dictionary (string literal)" subgraph
         # TODO: generate seeds with "code coverage" subgraph

@@ -1,5 +1,5 @@
-# Initial subgraph of SeedGen2
-# Initial stage is to generate the seeds with given harness source code, without any coverage information
+# Filetype subgraph of SeedGen2
+# filetype stage is to generate the seeds with given harness source code, without any coverage information
 
 # The agent will go through these steps:
 # 1. given the harness source code, source code file name, project name, determine the filetype of the seeds.
@@ -9,7 +9,7 @@
 
 from dataclasses import dataclass
 from seedgen2.agent.seedson import seedson
-from seedgen2.agent.sowbot import Sowbot
+from seedgen2.agent.sowbot import Sowbot, SowbotResult
 from seedgen2.utils.grpc import SeedD
 
 
@@ -84,8 +84,9 @@ def get_filetype(harness_source_code: str, harness_file_name: str, project_name:
     )
 
 
-def generate_based_on_filetype(seedd: SeedD, harness_binary: str, harness_source_code: str, filetype_info: FileTypeInfo):
+def generate_based_on_filetype(seedd: SeedD, harness_binary: str, harness_source_code: str, filetype_info: FileTypeInfo) -> SowbotResult:
     sowbot = Sowbot(seedd, harness_binary)
+    # TODO: generate multiple seed groups for each feature
     prompt = PROMPT_generate.format(
         harness_code=harness_source_code,
         file_type=filetype_info.file_type,

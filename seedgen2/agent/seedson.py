@@ -151,7 +151,7 @@ def seedson(prompt: str, json_schema: dict, max_retries: int = 3, model=None):
         response_content='',
         error_happened=False,
         error_message='',
-        json_result=None,
+        json_result={},
     )
 
     result = graph.invoke(initial_state)

@@ -1,7 +1,7 @@
 from utils.functions import parse_functions
 from utils.grpc import SeedD
 from utils.coverage import parse_partially_covered_functions
-from utils.callgraph import build_graph_from_json, visualize_graph
+from utils.callgraph import _build_graph_from_json, visualize_graph
 from utils.generators import SeedGeneratorStore
 
 from agent.graphs.filetype import get_filetype
