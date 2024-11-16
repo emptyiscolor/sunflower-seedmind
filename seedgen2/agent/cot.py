@@ -3,10 +3,10 @@
 # it receives a HumanMessage and returns an AIMessage.
 
 from dataclasses import dataclass
-from typing import Any, List, Optional, Annotated
-import time
+from typing import Any, List, Optional, Annotated, TypedDict
 import json
 import logging
+import operator
 
 from langchain_core.messages import HumanMessage, AIMessage, AnyMessage
 from langgraph.graph import StateGraph, START, END
@@ -31,39 +31,38 @@ Example of a valid JSON response:
     FINAL_PROMPT = "Please provide the final answer based solely on your reasoning above. Do not use JSON formatting. Only provide the text response without any titles or preambles. Retain any formatting as instructed by the original prompt, such as exact formatting for free response or multiple choice."
 
 
-@dataclass
-class COTState:
+class COTState(TypedDict):
     """State management for Chain-of-Thought reasoning."""
     model: Any
     json_model: Any
     messages: Annotated[List[AnyMessage], add_messages]
-    error_happened: bool = False
-    error_message: str = ""
-    step_count: int = 0
-    max_steps: int = 25
-    final_answer: Optional[str] = None
-    next_action: str = "continue"
+    error_happened: bool
+    error_message: str
+    step_count: int
+    max_steps: int
+    final_answer: Optional[str]
+    next_action: str
+    chain_of_thought: Annotated[List[str], operator.add]
 
 
 class GenerateStepNode:
     """Generates a reasoning step."""
 
     def __call__(self, state: COTState):
-        logging.info(f"Generating reasoning step {state.step_count + 1}")
-        model = state.json_model
-        messages = state.messages
+        logging.info(f"Generating reasoning step {state['step_count'] + 1}")
+        model = state["json_model"]
+        messages = state["messages"]
 
         # Generate the next reasoning step
         response = model.invoke(messages)
-        step_count = state.step_count + 1
+        step_count = state["step_count"] + 1
 
         # Parse the assistant's response
         try:
             step_data = json.loads(response.content)
             next_action = step_data.get("next_action", "final_answer")
-            logging.info(f"# {step_count}. {next_action}")
-            logging.info(f"{step_data.get('title')}")
-            logging.info(f"{step_data.get('content')}")
+            logging.info(f"STEP {step_count}. {step_data.get(
+                'title'):<20}: {step_data.get('content')}")
         except json.JSONDecodeError as e:
             logging.error(f"Failed to parse JSON response: {e}")
             return {
@@ -75,7 +74,10 @@ class GenerateStepNode:
         return {
             "step_count": step_count,
             "messages": [response],
-            "next_action": next_action
+            "next_action": next_action,
+            "chain_of_thought": [
+                f"{step_data.get('title')}: {step_data.get('content')}"
+            ]
         }
 
 
@@ -84,12 +86,12 @@ class GenerateFinalAnswerNode:
 
     def __call__(self, state: COTState):
         logging.info("Generating final answer")
-        model = state.model
+        model = state["model"]
         # Ask the assistant to provide the final answer
 
         prompt = CoTPrompts.FINAL_PROMPT
 
-        messages = state.messages + [HumanMessage(content=prompt)]
+        messages = state["messages"] + [HumanMessage(content=prompt)]
 
         response = model.invoke(messages)
 
@@ -100,7 +102,7 @@ class GenerateFinalAnswerNode:
 
 
 def EDGE_should_continue(state: COTState) -> bool:
-    return state.next_action != 'final_answer' and state.step_count < state.max_steps
+    return state["next_action"] != 'final_answer' and state["step_count"] < state["max_steps"]
 
 
 def build_cot_graph():
@@ -136,6 +138,8 @@ class CoT:
             self.model = model
             self.json_model = json_model
 
+        self.chain_of_thought = []
+
     def invoke(self, messages: List[AnyMessage]) -> AIMessage:
         """
         Runs the chain-of-thought reasoning process.
@@ -155,14 +159,27 @@ class CoT:
                 HumanMessage(content=CoTPrompts.PROMPT_COT),
                 *messages,
                 AIMessage(
-                    content="Thank you! I will now think step by step following my instructions, starting at the beginning after decomposing the problem.")
+                    content="Thank you! I will now think step by step following my instructions, starting at the beginning after decomposing the problem."
+                )
             ],
+            error_happened=False,
+            error_message='',
+            final_answer=None,
             step_count=0,
             max_steps=25,
-            next_action="continue"
+            next_action="continue",
+            chain_of_thought=[]
         )
 
         result = graph.invoke(initial_state)
         if result.get("final_answer") is None:
             raise ValueError("No final answer generated")
+
+        self.chain_of_thought = result.get("chain_of_thought", [])
         return AIMessage(content=result["final_answer"])
+
+    def get_chain_of_thought(self) -> List[str]:
+        """
+        A secret API that returns the chain-of-thought reasoning steps from last invocation.
+        """
+        return self.chain_of_thought

@@ -8,23 +8,17 @@ logging.basicConfig(level=logging.INFO)
 
 
 prompt = """
-My Mazda CX-30 (purchased last year):
-Purchase Price: $30,000 (out-the-door)
-Current Trade-In Value: Approximately $19,633 
-
-FYI, For the same CX-30:
-Estimated Monthly Payment for 36-Month Lease: Approximately $249 with $2,999 due at signing 
-
-Tesla Model 3 Pricing:
-Long Range All-Wheel Drive (AWD): Starting at $47,490
-
-I'm thinking change my car from mazda to the tesla model 3. I want to make wise decisions. Based on those information, give me details (with numbers and explanations) about the transition, is it worth it or should I just wait one or two more years.
+A farmer needs to cross a river with two chickens. The boat only has room for one human and two animals. What is the smallest number of crossings needed for the farmer to get across with the two chickens?
 """
+
 
 print("COT result:")
 model = CoT(model=SeedGen2GenerativeModel().model,
             json_model=SeedGen2GenerativeModel().json_model)
 print(model.invoke([HumanMessage(content=prompt)]).content)
+
+print("Chain-of-thought:")
+print(model.get_chain_of_thought())
 
 print("Normal result:")
 model = SeedGen2GenerativeModel().model

@@ -5,6 +5,7 @@ from typing import List, Optional
 from pathlib import Path
 
 from seedgen2.agent.graphs.filetype import generate_based_on_filetype, get_filetype
+from seedgen2.agent.graphs.format import align_format
 from seedgen2.agent.graphs.predicates import improve_entrance_by_predicate
 from seedgen2.agent.sowbot import SowbotResult
 from seedgen2.utils.grpc import SeedD
@@ -98,9 +99,17 @@ class SeedGenAgent:
         harness_info = self._get_harness_info(functions)
 
         # Generate seeds using different strategies
+
+        # Filetype
         result = self._generate_filetype_seeds(harness_info)
-        improve_entrance_by_predicate(
+
+        # Format
+        align_format(
             self.seedd, result.generator_script, result.seed_evaluation_result, functions, self.harness_binary)
+
+        # Predicate
+        # improve_entrance_by_predicate(
+        #     self.seedd, result.generator_script, result.seed_evaluation_result, functions, self.harness_binary)
 
         # TODO: generate seeds with "dictionary (string literal)" subgraph
         # TODO: generate seeds with "code coverage" subgraph
