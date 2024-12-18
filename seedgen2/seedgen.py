@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 from pathlib import Path
 
+from seedgen2.agent.graphs.firstscript import generate_first_script
 from seedgen2.agent.graphs.filetype import generate_based_on_filetype, get_filetype
 from seedgen2.agent.graphs.format import align_format
 from seedgen2.agent.graphs.predicates import improve_entrance_by_predicate
@@ -71,7 +72,7 @@ class SeedGenAgent:
             file_name=Path(harness_func.file_path).name
         )
 
-    def _generate_filetype_seeds(self, harness_info: HarnessInfo) -> SowbotResult:
+    def _generate_filetype_seeds(self, script: str, format_analysis: str, harness_info: HarnessInfo) -> SowbotResult:
         filetype_result = get_filetype(
             harness_source_code=harness_info.source_code,
             harness_file_name=harness_info.file_name,
@@ -83,6 +84,8 @@ class SeedGenAgent:
 
         result = generate_based_on_filetype(
             self.seedd,
+            script,
+            format_analysis,
             self.harness_binary,
             harness_info.source_code,
             filetype_result
@@ -98,14 +101,34 @@ class SeedGenAgent:
         functions = get_functions(self.seedd, self.harness_binary)
         harness_info = self._get_harness_info(functions)
 
-        # Generate seeds using different strategies
+        # Seed generation pipeline
+        # 1. Generate an intial script
+        first_result = generate_first_script(self.seedd, harness_info.source_code, self.harness_binary)
 
-        # Filetype
-        result = self._generate_filetype_seeds(harness_info)
+        # 2. Refine the initial script using the correct testcase formatting
+        format_result, format_analysis = align_format(
+            self.seedd, first_result.generator_script, first_result.seed_evaluation_result, functions, self.harness_binary)
 
-        # Format
-        align_format(
-            self.seedd, result.generator_script, result.seed_evaluation_result, functions, self.harness_binary)
+        # 3. Enhance the format-aligned script using common file type information
+        # Midas's note: this doesn't work very well right now, the resulting script either has no change compared to the last step (???) or changes that break the required format (leading to less coverage)
+        filetype_result = self._generate_filetype_seeds(format_result.generator_script, format_analysis, harness_info)
+        print(filetype_result.generator_script)
+
+        # 4. Predicate flipper / Coverage discovery (?)
+
+        # 5. ???
+
+        # 6. Profit
+
+
+        
+
+        # # Filetype
+        # result = self._generate_filetype_seeds(harness_info)
+
+        # # Format
+        # align_format(
+        #     self.seedd, result.generator_script, result.seed_evaluation_result, functions, self.harness_binary)
 
         # Predicate
         # improve_entrance_by_predicate(

@@ -21,16 +21,15 @@ class FileTypeInfo:
 
 # TODO: write a better prompt for the knowledgeable model
 PROMPT_determine_file_type = """
-Help me determine the file type of fuzzing seeds.
-For a given project, we already have a test harness for fuzzing testing purpose. Based on the source code of the harness, you need to determine the file type of the seeds.
+Help me determine if there is a common file type that is being used as part of a test case for this fuzzing harness. In other words, based on the source code of the harness, you need to determine any potential common file type that is being used.
 
-Here is the project {project_name}:
+The project under test's name is {project_name}.
 Here is the source code of the harness `{harness_file_name}`:
 ```
 {harness_source_code}
 ```
 
-You should return the file type of the seeds in a JSON format, with the following fields:
+You should return the file type that you recognize in a JSON format, with the following fields:
 - file_type: the file type of the seeds, e.g. `jpg`, `png`, `gif`, etc. If the file type is not determined (or not a common known file type), you should return `unknown`.
 - features: a list of interesting features of the file type, e.g. "Color Space", "Chroma Subsampling", "Progressive Encoding", etc.
 
@@ -44,17 +43,21 @@ Here is an example of the JSON format:
 """
 
 PROMPT_generate = """
-As a professional security engineer, your task is to develop a Python script that generates a new test case file. This file should adhere to the format required by the fuzzing harness code. The script will play a crucial role in creating diverse and effective test cases for thorough security testing.
+I am working on a fuzzing project and have developed a Python script to generate test cases for a fuzzing harness. However, I noticed that the test harness might make use of a specific common file type called {file_type}, containing the feature of {feature}, which is not fully utilized in the current generation script. Therefore, I need your help to modify the script to encompass the generation of this file type's content as part of the test case generation, in order to increase the overall test coverage.
 
-Write a Python script that generates a {file_type} test case file with the feature of {feature}, compatible with the required format of the fuzzing harness code. The generated test cases should be diverse and effective for security testing purposes. Consider various input types, edge cases, and potential vulnerabilities relevant to the system being tested. Ensure your script can produce a wide range of test scenarios to thoroughly exercise the target application or protocol.
+Here is the current python script:
+{script}
 
-
-## Fuzzing Harness Code:
-{harness_code}
+After the modification, with the addition of generating {file_type} content, the format of the generated test cases from this script should still strictly adhere to the format required by the fuzzing harness code, as described in the following documentation:
+{format_analysis}
 """
 
 
-def get_filetype(harness_source_code: str, harness_file_name: str, project_name: str) -> FileTypeInfo:
+def get_filetype(
+        harness_source_code: str, 
+        harness_file_name: str, 
+        project_name: str
+) -> FileTypeInfo:
     # Build the prompt
     prompt = PROMPT_determine_file_type.format(
         harness_source_code=harness_source_code,
@@ -84,12 +87,21 @@ def get_filetype(harness_source_code: str, harness_file_name: str, project_name:
     )
 
 
-def generate_based_on_filetype(seedd: SeedD, harness_binary: str, harness_source_code: str, filetype_info: FileTypeInfo) -> SowbotResult:
+def generate_based_on_filetype(
+        seedd: SeedD, 
+        script: str,
+        format_analysis: str,
+        harness_binary: str, 
+        harness_source_code: str, 
+        filetype_info: FileTypeInfo
+) -> SowbotResult:
     sowbot = Sowbot(seedd, harness_binary)
     # TODO: generate multiple seed groups for each feature
     prompt = PROMPT_generate.format(
         harness_code=harness_source_code,
         file_type=filetype_info.file_type,
         feature=filetype_info.features[0],
+        script=script,
+        format_analysis=format_analysis
     )
     return sowbot.run(prompt)
