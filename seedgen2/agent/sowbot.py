@@ -26,7 +26,7 @@ class SowbotPrompts:
 
 ## Instructions and Steps:
 - As an integrated component of an automated system, you should perform the tasks without seeking human confirmation or help.
-- You MUST ensure the python code is wrapped in triple backticks for proper formatting, and it should be the only code your response.
+- You MUST ensure the python code is wrapped in triple backticks for proper formatting, and it should be the only code in your response.
 - You MUST include the full valid Python script in your response.
 """
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
 """
 
     HANDLE_GENERATION_ERROR = """
-    There is an error in the your generated script according to our automated testing: {error_message}
+    There is an error in your generated script according to our automated testing: {error_message}
     Please rewrite the script.
     """
 
