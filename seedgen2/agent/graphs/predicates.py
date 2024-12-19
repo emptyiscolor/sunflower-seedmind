@@ -74,7 +74,7 @@ def get_related_functions(seedd: SeedD, functions: List[FunctionInfo], target_fu
 
     related_functions_source = [
         (f.name, seedd.get_region_source(
-            f.file_path, f.start_line, f.start_column, f.end_line, f.end_column)) for f in related_functions_loc if f is not None
+            f.file_path, f.start_line, f.start_column, f.end_line, f.end_column).source) for f in related_functions_loc if f is not None
     ]
 
     return "\n".join([f"Function `{name}`:\n{source}" for name, source in related_functions_source])
