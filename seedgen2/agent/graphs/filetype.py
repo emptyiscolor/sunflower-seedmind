@@ -43,12 +43,12 @@ Here is an example of the JSON format:
 """
 
 PROMPT_generate = """
-I am working on a fuzzing project and have developed a Python script to generate test cases for a fuzzing harness. However, I noticed that the test harness might make use of a specific common file type called {file_type}, containing the feature of {feature}, which is not fully utilized in the current generation script. Therefore, I need your help to modify the script to encompass the generation of this file type's content as part of the test case generation, in order to increase the overall test coverage.
+I am working on a fuzzing project and have developed a Python script to generate test cases for a fuzzing harness. However, I noticed that the test harness might make use of a specific common file type called {file_type}, containing the feature of {feature}, which is not fully utilized in the current generation script. Therefore, I need your help to improve the script to encompass the generation of this file type's content as part of the test case generation, in order to increase the overall test coverage.
 
 Here is the current python script:
 {script}
 
-After the modification, with the addition of generating {file_type} content, the format of the generated test cases from this script should still strictly adhere to the format required by the fuzzing harness code, as described in the following documentation:
+After the improvement, with the addition of generating {file_type} content, the format of the generated test cases from this script should still follow the format required by the fuzzing harness code, as described in the following documentation:
 {format_analysis}
 """
 
@@ -81,6 +81,7 @@ def get_filetype(
     # Build the graph
     result = seedson(prompt, json_schema)
 
+    # TODO: error handling for when seedson's result doesn't have file_type and/or features fields
     return FileTypeInfo(
         file_type=result['file_type'],
         features=result['features'],
@@ -95,8 +96,9 @@ def generate_based_on_filetype(
         harness_source_code: str, 
         filetype_info: FileTypeInfo
 ) -> SowbotResult:
-    sowbot = Sowbot(seedd, harness_binary)
+    sowbot = Sowbot(seedd, harness_binary, include_example=False)
     # TODO: generate multiple seed groups for each feature
+    # TODO: handle unknown file type
     prompt = PROMPT_generate.format(
         harness_code=harness_source_code,
         file_type=filetype_info.file_type,

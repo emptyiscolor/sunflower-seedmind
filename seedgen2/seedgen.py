@@ -108,11 +108,12 @@ class SeedGenAgent:
         # 2. Refine the initial script using the correct testcase formatting
         format_result, format_analysis = align_format(
             self.seedd, first_result.generator_script, first_result.seed_evaluation_result, functions, self.harness_binary)
+        #print(format_analysis)
 
         # 3. Enhance the format-aligned script using common file type information
         # Midas's note: this doesn't work very well right now, the resulting script either has no change compared to the last step (???) or changes that break the required format (leading to less coverage)
         filetype_result = self._generate_filetype_seeds(format_result.generator_script, format_analysis, harness_info)
-        print(filetype_result.generator_script)
+        #print(filetype_result.generator_script)
 
         # 4. Predicate flipper / Coverage discovery (?)
 
