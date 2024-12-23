@@ -113,9 +113,9 @@ done
 
         return GeneratorRunResult(True, None, seed_paths)
 
-    def log_prompt(self,  generator_id: int, prompt: str):
+    def log_prompt(self,  generator_id: int, prompt: str, prompt_name: str):
         prompt_file_path = os.path.join(
-            self.result_dir, f"prompt_{generator_id}.txt")
+            self.result_dir, f"prompt_{prompt_name}_{generator_id}.txt")
         
         with open(prompt_file_path, "w") as f:
             f.write(prompt)

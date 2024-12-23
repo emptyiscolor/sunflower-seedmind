@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import List, Optional
 from pathlib import Path
 
-from seedgen2.agent.graphs.firstscript import generate_first_script
 from seedgen2.agent.graphs.filetype import generate_based_on_filetype, get_filetype
-from seedgen2.agent.graphs.format import align_format
+from seedgen2.agent.graphs.gen_script import generate_first_script, improve_script
+from seedgen2.agent.graphs.gen_structure import generate_first_documentation, improve_documentation
 from seedgen2.agent.graphs.predicates import improve_entrance_by_predicate
 from seedgen2.agent.sowbot import SowbotResult
 from seedgen2.utils.grpc import SeedD
@@ -72,20 +72,19 @@ class SeedGenAgent:
             file_name=Path(harness_func.file_path).name
         )
 
-    def _generate_filetype_seeds(self, script: str, format_analysis: str, harness_info: HarnessInfo) -> SowbotResult:
+    def _generate_filetype_seeds(self, script: str, structure_documentation: str, harness_info: HarnessInfo) -> SowbotResult:
         filetype_result = get_filetype(
             harness_source_code=harness_info.source_code,
             harness_file_name=harness_info.file_name,
             project_name=self.project_name,
         )
 
-        logging.info(f"Identified file type: {filetype_result.file_type}")
-        logging.info(f"Identified features: {filetype_result.features}")
+        logging.info(f"Identified file type: {filetype_result}")
 
         result = generate_based_on_filetype(
             self.seedd,
             script,
-            format_analysis,
+            structure_documentation,
             self.harness_binary,
             harness_info.source_code,
             filetype_result
@@ -102,39 +101,20 @@ class SeedGenAgent:
         harness_info = self._get_harness_info(functions)
 
         # Seed generation pipeline
-        # 1. Generate an intial script
+
+        # 1. Generate an initial script and an initial test case structure documentation
         first_result = generate_first_script(self.seedd, harness_info.source_code, self.harness_binary)
+        current_script = first_result.generator_script
+        current_doc = generate_first_documentation(self.seedd, first_result.seed_evaluation_result, functions, self.result_dir)
 
-        # 2. Refine the initial script using the correct testcase formatting
-        format_result, format_analysis = align_format(
-            self.seedd, first_result.generator_script, first_result.seed_evaluation_result, functions, self.harness_binary)
-        #print(format_analysis)
-
-        # 3. Enhance the format-aligned script using common file type information
-        # Midas's note: this doesn't work very well right now, the resulting script either has no change compared to the last step (???) or changes that break the required format (leading to less coverage)
-        filetype_result = self._generate_filetype_seeds(format_result.generator_script, format_analysis, harness_info)
-        #print(filetype_result.generator_script)
-
-        # 4. Predicate flipper / Coverage discovery (?)
-
-        # 5. ???
-
-        # 6. Profit
-
+        # 2. Improve the script and documentation based on the current ones for X amount of rounds
+        rounds = 2
+        for i in range(rounds):
+            current_result = improve_script(self.seedd, current_script, current_doc, self.harness_binary)
+            current_script = current_result.generator_script
+            current_doc = improve_documentation(self.seedd, current_result.seed_evaluation_result, functions, current_doc, self.result_dir, i+1)
+        
+        # 3. Enhance the script using common file type information, while retaining the structure in the documentation
+        filetype_result = self._generate_filetype_seeds(current_script, current_doc, harness_info)
 
         
-
-        # # Filetype
-        # result = self._generate_filetype_seeds(harness_info)
-
-        # # Format
-        # align_format(
-        #     self.seedd, result.generator_script, result.seed_evaluation_result, functions, self.harness_binary)
-
-        # Predicate
-        # improve_entrance_by_predicate(
-        #     self.seedd, result.generator_script, result.seed_evaluation_result, functions, self.harness_binary)
-
-        # TODO: generate seeds with "dictionary (string literal)" subgraph
-        # TODO: generate seeds with "code coverage" subgraph
-        # TODO: generate seeds with "call relationship" subgraph

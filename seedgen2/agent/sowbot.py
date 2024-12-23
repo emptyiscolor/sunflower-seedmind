@@ -23,7 +23,6 @@ class SowbotPrompts:
 - Has one argument, which is the output file path.
 - Generate one test case and write it to the output file.
 - The generated test case should be compatible with the fuzzing harness code provided.
-- The generated test cases should be diverse, by using randomized data fields to ensure a wide range of test scenarios to thoroughly exercise the target application or protocol.
 
 ## Instructions and Steps:
 - As an integrated component of an automated system, you should perform the tasks without seeking human confirmation or help.
@@ -252,7 +251,7 @@ class Sowbot:
         seeds = generator_run_result.get_seed_paths()
         generator_script = store.get_generator(generator_id)
 
-        store.log_prompt(generator_id, full_prompt)
+        store.log_prompt(generator_id, full_prompt, "sowbot")
 
         seed_feedback = run_seeds(self.seedd, self.harness_binary, seeds)
 
