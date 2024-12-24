@@ -43,11 +43,17 @@ def get_ancestors(G: nx.DiGraph, target_function: str) -> List[str]:
     return list(nx.ancestors(G, target_function))
 
 
-def get_successors(G: nx.DiGraph, target_function: str) -> List[str]:
+def get_successors(G: nx.DiGraph, target_function: str, depth_limit: int = 0) -> List[str]:
     # TODO: handle function overrides
     # we just ignore C++ can override functions for now, but it's very important to handle them in the future
 
     # TODO: handle file name case
     # in some cases, the target function is named as "file_name:function_name", we just drop the file name for now
     target_function = target_function.split(":")[-1]
-    return list(nx.descendants(G, target_function))
+
+    if depth_limit == 0:
+        return list(nx.descendants(G, target_function))
+    else:
+        successors_iter = nx.bfs_successors(G, target_function, depth_limit=depth_limit)
+        successors_list = [child for _, children in successors_iter for child in children]
+        return successors_list
