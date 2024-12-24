@@ -1,17 +1,11 @@
 # Filetype subgraph of SeedGen2
 # filetype stage is to improve the seed generation script, using information about common file types
 
-from dataclasses import dataclass
-from seedgen2.agent.sowbot import Sowbot, SowbotResult
+from seedgen2.graphs.plainbot import Plainbot
+from seedgen2.graphs.sowbot import Sowbot, SowbotResult
 from seedgen2.utils.grpc import SeedD
 
-from seedgen2.agent.presets import SeedGen2KnowledgeableModel
-
-@dataclass
-class FileTypeInfo:
-    file_type: str
-    features: list[str]
-
+from seedgen2.presets import SeedGen2KnowledgeableModel
 
 PROMPT_determine_file_type = """
 Help me determine if there is a common file type that is being used as part of a test case for this fuzzing harness. In other words, based on the source code of the harness, you need to determine any potential common file type that is being used.
@@ -37,8 +31,8 @@ After the improvement, with the addition of generating {file_type} content, the 
 
 
 def get_filetype(
-        harness_source_code: str, 
-        harness_file_name: str, 
+        harness_source_code: str,
+        harness_file_name: str,
         project_name: str
 ) -> str:
     # Build the prompt
@@ -50,15 +44,16 @@ def get_filetype(
 
     knowledgeable_model = SeedGen2KnowledgeableModel().model
 
-    return knowledgeable_model.invoke(prompt).content # TODO: error handling, unknown file type handling
+    plainbot = Plainbot(model=knowledgeable_model)
+    return plainbot.run(prompt)
 
 
 def generate_based_on_filetype(
-        seedd: SeedD, 
+        seedd: SeedD,
         script: str,
         structure_documentation: str,
-        harness_binary: str, 
-        harness_source_code: str, 
+        harness_binary: str,
+        harness_source_code: str,
         filetype_info: str
 ) -> SowbotResult:
     sowbot = Sowbot(seedd, harness_binary, include_example=False)

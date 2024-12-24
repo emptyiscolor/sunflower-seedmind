@@ -1,8 +1,8 @@
 from langchain_core.messages import HumanMessage, AIMessage, AnyMessage
-from seedgen2.agent.cot import CoT
+from seedgen2.graphs.cotbot import CoT
 import logging
 
-from seedgen2.agent.presets import SeedGen2GenerativeModel
+from seedgen2.presets import SeedGen2GenerativeModel
 
 logging.basicConfig(level=logging.INFO)
 

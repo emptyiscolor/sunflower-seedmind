@@ -4,16 +4,17 @@ from dataclasses import dataclass
 from typing import List, Optional
 from pathlib import Path
 
-from seedgen2.agent.graphs.filetype import generate_based_on_filetype, get_filetype
-from seedgen2.agent.graphs.gen_script import generate_first_script, improve_script
-from seedgen2.agent.graphs.gen_structure import generate_first_documentation, improve_documentation
-from seedgen2.agent.graphs.predicates import improve_entrance_by_predicate
-from seedgen2.agent.sowbot import SowbotResult
+from seedgen2.agents.alignment import align_script, update_doc
+from seedgen2.agents.filetype import generate_based_on_filetype, get_filetype
+from seedgen2.agents.glance import generate_first_script
+from seedgen2.graphs.sowbot import SowbotResult
 from seedgen2.utils.grpc import SeedD
 from seedgen2.utils.generators import SeedGeneratorStore
 from seedgen2.utils.functions import get_functions, FunctionInfo
 
 import logging
+
+from seedgen2.utils.tracker import Tracker
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -44,6 +45,8 @@ class SeedGenAgent:
         self.harness_binary = harness_binary
         self.store = SeedGeneratorStore()
         self.store.set_result_dir(result_dir)
+        self.tracker = Tracker()
+        self.tracker.set_log_dir(result_dir)
 
     def _find_harness_function(self, functions: List[FunctionInfo]) -> Optional[FunctionInfo]:
         return next(
@@ -103,18 +106,21 @@ class SeedGenAgent:
         # Seed generation pipeline
 
         # 1. Generate an initial script and an initial test case structure documentation
-        first_result = generate_first_script(self.seedd, harness_info.source_code, self.harness_binary)
+        first_result = generate_first_script(
+            self.seedd, harness_info.source_code, self.harness_binary)
         current_script = first_result.generator_script
-        current_doc = generate_first_documentation(self.seedd, first_result.seed_evaluation_result, functions, self.result_dir)
+        current_doc = update_doc(
+            self.seedd, first_result.seed_evaluation_result, functions)
 
         # 2. Improve the script and documentation based on the current ones for X amount of rounds
         rounds = 2
         for i in range(rounds):
-            current_result = improve_script(self.seedd, current_script, current_doc, self.harness_binary)
+            current_result = align_script(
+                self.seedd, current_script, current_doc, self.harness_binary)
             current_script = current_result.generator_script
-            current_doc = improve_documentation(self.seedd, current_result.seed_evaluation_result, functions, current_doc, self.result_dir, i+1)
-        
-        # 3. Enhance the script using common file type information, while retaining the structure in the documentation
-        filetype_result = self._generate_filetype_seeds(current_script, current_doc, harness_info)
+            current_doc = update_doc(
+                self.seedd, current_result.seed_evaluation_result, functions, current_doc)
 
-        
+        # 3. Enhance the script using common file type information, while retaining the structure in the documentation
+        filetype_result = self._generate_filetype_seeds(
+            current_script, current_doc, harness_info)

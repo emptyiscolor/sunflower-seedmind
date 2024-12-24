@@ -1,9 +1,9 @@
 # Predicates subgraph of SeedGen2
 
 # Given coverage information (SeedFeedback), evaluate the predicates
-from seedgen2.agent.cot import CoT
-from seedgen2.agent.presets import SeedGen2GenerativeModel, SeedGen2InferModel
-from seedgen2.agent.sowbot import Sowbot
+from seedgen2.graphs.cotbot import CoT
+from seedgen2.presets import SeedGen2GenerativeModel, SeedGen2InferModel
+from seedgen2.graphs.sowbot import Sowbot
 from seedgen2.utils.callgraph import get_current_callgraph, get_ancestors, get_successors
 from seedgen2.utils.functions import FunctionInfo, locate_function
 from seedgen2.utils.grpc import SeedD
@@ -101,7 +101,8 @@ def improve_entrance_by_predicate(
     """
     # Find the entrance function (LLVMFuzzerTestOneInput)
     entrance_function = next(
-        (func for func in seed_feedback.partially_covered_functions if func.function_name == "LLVMFuzzerTestOneInput"),
+        (func for func in seed_feedback.partially_covered_functions if func.function_name ==
+         "LLVMFuzzerTestOneInput"),
         None
     )
 
@@ -116,7 +117,8 @@ def improve_entrance_by_predicate(
     predicate = random.choice(old_predicates)
 
     # Get related functions and predicate source code
-    related_functions = get_related_functions(seedd, functions, entrance_function.function_name)
+    related_functions = get_related_functions(
+        seedd, functions, entrance_function.function_name)
     predicate_source = seedd.get_region_source(
         entrance_function.file_path,
         predicate.start_line,
@@ -185,7 +187,8 @@ def improve_entrance_by_predicate(
             logging.info(f"New predicates: {new_predicates}")
             return current_script
 
-        logging.info(f"Attempt {attempt}/{N} failed to flip the predicate value.")
+        logging.info(
+            f"Attempt {attempt}/{N} failed to flip the predicate value.")
 
     logging.info(f"Failed to flip the predicate value after {N} attempts.")
     return current_script
