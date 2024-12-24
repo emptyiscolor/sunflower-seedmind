@@ -6,7 +6,8 @@ import json
 import jsonschema
 import logging
 
-from seedgen2.agent.presets import SeedGen2KnowledgeableModel
+from seedgen2.presets import SeedGen2KnowledgeableModel
+from seedgen2.utils.tracker import Tracker
 
 # Define the general state for JSON validation
 
@@ -36,7 +37,7 @@ class JsonValidationState(TypedDict):
 
 
 def NODE_initial_prompt(state: JsonValidationState):
-    messages = state.get('messages', [])
+    messages = []
     messages.append(HumanMessage(content=state['prompt']))
     response = state['model'].invoke(messages)
     messages.append(response)
@@ -137,22 +138,51 @@ def build_json_validation_graph():
     return graph_builder.compile()
 
 
-def seedson(prompt: str, json_schema: dict, max_retries: int = 3, model=None):
-    if model is None:
-        model = SeedGen2KnowledgeableModel().json_model
-    graph = build_json_validation_graph()
-    initial_state = JsonValidationState(
-        prompt=prompt,
-        json_schema=json_schema,
-        model=model,
-        max_retries=max_retries,
-        retries=0,
-        messages=[],
-        response_content='',
-        error_happened=False,
-        error_message='',
-        json_result={},
-    )
+class Jsonbot:
+    """Main class for JSON generation and validation."""
 
-    result = graph.invoke(initial_state)
-    return result['json_result']
+    def __init__(self, max_retries: int = 3, model=None):
+        self.max_retries = max_retries
+        if model is None:
+            self.model = SeedGen2KnowledgeableModel().json_model
+        else:
+            self.model = model
+
+    def run(self, prompt: str, json_schema: dict) -> dict:
+        """
+        Runs the JSON generation and validation process.
+
+        Args:
+            prompt: The input prompt for generation
+            json_schema: The JSON schema to validate against
+
+        Returns:
+            dict: The validated JSON result
+        """
+        graph = build_json_validation_graph()
+        initial_state = JsonValidationState(
+            prompt=prompt,
+            json_schema=json_schema,
+            model=self.model,
+            max_retries=self.max_retries,
+            retries=0,
+            messages=[],
+            response_content='',
+            error_happened=False,
+            error_message='',
+            json_result={},
+        )
+
+        result = graph.invoke(initial_state)
+
+        tracker = Tracker()
+        tracker.add_trace(
+            prompt=prompt,
+            result=result['json_result'],
+            bot_name="jsonbot",
+            additional_info={
+                "retries": result['retries'],
+            },
+        )
+
+        return result['json_result']

@@ -10,10 +10,11 @@ from langchain_core.messages import HumanMessage, AnyMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 
-from seedgen2.agent.presets import SeedGen2GenerativeModel
+from seedgen2.presets import SeedGen2GenerativeModel
 from seedgen2.utils.grpc import SeedD
 from seedgen2.utils.generators import GeneratorRunResult, SeedGeneratorStore
 from seedgen2.utils.seeds import SeedFeedback, run_seeds
+from seedgen2.utils.tracker import Tracker
 
 
 class SowbotPrompts:
@@ -250,10 +251,18 @@ class Sowbot:
         store = SeedGeneratorStore()
         seeds = generator_run_result.get_seed_paths()
         generator_script = store.get_generator(generator_id)
-
-        store.log_prompt(generator_id, full_prompt, "sowbot")
-
         seed_feedback = run_seeds(self.seedd, self.harness_binary, seeds)
+
+        tracker = Tracker()
+        tracker.add_trace(
+            prompt=full_prompt,
+            result=generator_script,
+            bot_name="sowbot",
+            additional_info={
+                "generator_id": generator_id,
+                "coverage": seed_feedback.coverage_info,
+            }
+        )
 
         return SowbotResult(
             generator_script=generator_script,

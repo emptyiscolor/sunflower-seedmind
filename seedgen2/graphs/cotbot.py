@@ -12,7 +12,7 @@ from langchain_core.messages import HumanMessage, AIMessage, AnyMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 
-from seedgen2.agent.presets import SeedGen2GenerativeModel
+from seedgen2.presets import SeedGen2GenerativeModel
 
 
 class CoTPrompts:
