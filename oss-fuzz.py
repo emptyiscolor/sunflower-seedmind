@@ -157,6 +157,8 @@ def compile_project(root, project_name, project_config):
         "BANDFUZZ_OPT": "0",
         "BANDFUZZ_PROFILE": "1",
         "BANDFUZZ_RUNTIME": "libcallgraph_rt.a",
+        "GENERATE_COMPILATION_DATABASE": "1",
+        "COMPILATION_DATABASE_DIR": "/out/compilation_database",
         # For OSS-Fuzz projects only:
         "FUZZING_LANGUAGE": project_config["language"],
         # For AIxCC CPs only:
