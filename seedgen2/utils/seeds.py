@@ -27,13 +27,27 @@ def run_seeds(seedd: SeedD, harness_binary: str, seed_paths: list[str]) -> SeedF
     return __get_seed_coverage(seedd, harness_binary, shared_seed_paths)
 
 
+def get_merged_coverage(seedd: SeedD, harness_binary: str) -> SeedFeedback:
+    merged_coverage_result = seedd.get_merged_coverage(harness_binary)
+    coverage_info = parse_coverage(merged_coverage_result.coverage)
+    logging.info(f"Merged coverage results: {coverage_info}")
+    partially_covered_functions = parse_partially_covered_functions(
+        merged_coverage_result.coverage)
+    return SeedFeedback(
+        coverage_info=coverage_info,
+        partially_covered_functions=partially_covered_functions,
+        report=merged_coverage_result.report,
+    )
+
+
 def __get_seed_coverage(seedd: SeedD, harness_binary: str, seed_paths: list[str]) -> SeedFeedback:
     run_seeds_result = seedd.run_seeds(
         harness_binary=harness_binary,
         seeds_path=seed_paths,
     )
     coverage_info = parse_coverage(run_seeds_result.coverage)
-    logging.info(f"Completed seed evaluation. Coverage results: {coverage_info}")
+    logging.info(f"Completed seed evaluation. Coverage results: {
+                 coverage_info}")
     partially_covered_functions = parse_partially_covered_functions(
         run_seeds_result.coverage)
 

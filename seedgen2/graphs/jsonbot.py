@@ -172,8 +172,11 @@ class Jsonbot:
             error_message='',
             json_result={},
         )
+        logging.info(f"Running jsonbot with prompt: {prompt[:100]}...")
 
         result = graph.invoke(initial_state)
+
+        logging.info(f"Jsonbot finished")
 
         tracker = Tracker()
         tracker.add_trace(

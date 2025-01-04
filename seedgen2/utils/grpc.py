@@ -88,6 +88,12 @@ class SeedD:
         return self.stub.RunSeeds(request, compression=grpc.Compression.Gzip)
 
     @grpc_call
+    def get_merged_coverage(self, harness_binary: str) -> seedd_pb2.RunSeedsResponse:
+        """Gets the merged coverage for a harness."""
+        request = seedd_pb2.GetMergedCoverageRequest(harness_binary=harness_binary)
+        return self.stub.GetMergedCoverage(request, compression=grpc.Compression.Gzip)
+
+    @grpc_call
     def get_region_source(
         self,
         filepath: str,

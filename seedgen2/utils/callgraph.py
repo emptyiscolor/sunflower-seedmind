@@ -1,4 +1,5 @@
 import json
+import logging
 import networkx as nx
 import matplotlib.pyplot as plt
 
@@ -20,7 +21,9 @@ def _build_graph_from_json(json_str: str) -> nx.DiGraph:
 
 
 def get_current_callgraph(seedd: SeedD, harness_binary: str) -> nx.DiGraph:
+    logging.info(f"Getting call graph for {harness_binary}")
     resp = seedd.get_call_graph(harness_binary)
+    logging.info(f"Call graph for {harness_binary} rebuilt successfully.")
     return _build_graph_from_json(resp.call_graph)
 
 

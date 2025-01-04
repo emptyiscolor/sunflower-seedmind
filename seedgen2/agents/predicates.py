@@ -72,10 +72,15 @@ def get_related_functions(seedd: SeedD, functions: List[FunctionInfo], harness_b
     related_functions_loc = [locate_function(
         f, functions) for f in related_function_list]
 
+    logging.info(
+        f"Based on the callgraph, got {len(related_functions_loc)} related functions.")
+
     related_functions_source = [
         (f.name, seedd.get_region_source(
             f.file_path, f.start_line, f.start_column, f.end_line, f.end_column).source) for f in related_functions_loc if f is not None
     ]
+
+    logging.info("Source code retrieved.")
 
     return "\n".join([f"Function `{name}`:\n{source}" for name, source in related_functions_source])
 

@@ -44,6 +44,10 @@ func (s *server) GetCallGraph(ctx context.Context, req *runtime.GetCallGraphRequ
 	return s.runSeedsService.GetCallGraph(ctx, req)
 }
 
+func (s *server) GetMergedCoverage(ctx context.Context, req *runtime.GetMergedCoverageRequest) (*runtime.RunSeedsResponse, error) {
+	return s.runSeedsService.GetMergedCoverage(ctx, req)
+}
+
 // UNIMPLEMENTED
 // func (s *server) ExtractFunctionSource(ctx context.Context, req *runtime.ExtractFunctionSourceRequest) (*runtime.ExtractFunctionSourceResponse, error) {
 // 	return nil, nil
