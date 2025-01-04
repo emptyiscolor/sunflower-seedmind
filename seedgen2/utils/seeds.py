@@ -15,6 +15,7 @@ import logging
 class SeedFeedback:
     coverage_info: CoverageInfo
     partially_covered_functions: List[PartiallyCoveredFunction]
+    report: str
 
 
 def run_seeds(seedd: SeedD, harness_binary: str, seed_paths: list[str]) -> SeedFeedback:
@@ -39,4 +40,5 @@ def __get_seed_coverage(seedd: SeedD, harness_binary: str, seed_paths: list[str]
     return SeedFeedback(
         coverage_info=coverage_info,
         partially_covered_functions=partially_covered_functions,
+        report=run_seeds_result.report,
     )

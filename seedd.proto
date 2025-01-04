@@ -20,6 +20,7 @@ message RunSeedsRequest {
 
 message RunSeedsResponse {
   string coverage = 1; // coverage will be return in JSON format
+  string report = 2; // report will be return in plain text format
 }
 
 message GetRegionSourceRequest {

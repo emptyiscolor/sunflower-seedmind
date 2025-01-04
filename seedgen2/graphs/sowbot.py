@@ -261,6 +261,7 @@ class Sowbot:
             additional_info={
                 "generator_id": generator_id,
                 "coverage": seed_feedback.coverage_info,
+                "report": seed_feedback.report,  # Export report for better evaluation
             }
         )
 

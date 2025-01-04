@@ -36,14 +36,18 @@ class RunSeedsResponse(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     COVERAGE_FIELD_NUMBER: builtins.int
+    REPORT_FIELD_NUMBER: builtins.int
     coverage: builtins.str
     """coverage will be return in JSON format"""
+    report: builtins.str
+    """report will be return in plain text format"""
     def __init__(
         self,
         *,
         coverage: builtins.str = ...,
+        report: builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["coverage", b"coverage"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["coverage", b"coverage", "report", b"report"]) -> None: ...
 
 global___RunSeedsResponse = RunSeedsResponse
 
