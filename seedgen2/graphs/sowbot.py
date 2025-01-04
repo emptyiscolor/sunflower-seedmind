@@ -29,6 +29,10 @@ class SowbotPrompts:
 - As an integrated component of an automated system, you should perform the tasks without seeking human confirmation or help.
 - You MUST ensure the python code is wrapped in triple backticks for proper formatting, and it should be the only code in your response.
 - You MUST include the full valid Python script in your response.
+- You should wrap your script in triple backticks, like this:
+```python
+...
+```
 """
 
     ONE_SHOT_EXAMPLE = """
