@@ -39,6 +39,11 @@ class SeedDStub(object):
                 request_serializer=seedd__pb2.RunSeedsRequest.SerializeToString,
                 response_deserializer=seedd__pb2.RunSeedsResponse.FromString,
                 _registered_method=True)
+        self.GetMergedCoverage = channel.unary_unary(
+                '/SeedD.SeedD/GetMergedCoverage',
+                request_serializer=seedd__pb2.GetMergedCoverageRequest.SerializeToString,
+                response_deserializer=seedd__pb2.RunSeedsResponse.FromString,
+                _registered_method=True)
         self.GetRegionSource = channel.unary_unary(
                 '/SeedD.SeedD/GetRegionSource',
                 request_serializer=seedd__pb2.GetRegionSourceRequest.SerializeToString,
@@ -65,6 +70,12 @@ class SeedDServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def RunSeeds(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetMergedCoverage(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -100,6 +111,11 @@ def add_SeedDServicer_to_server(servicer, server):
             'RunSeeds': grpc.unary_unary_rpc_method_handler(
                     servicer.RunSeeds,
                     request_deserializer=seedd__pb2.RunSeedsRequest.FromString,
+                    response_serializer=seedd__pb2.RunSeedsResponse.SerializeToString,
+            ),
+            'GetMergedCoverage': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetMergedCoverage,
+                    request_deserializer=seedd__pb2.GetMergedCoverageRequest.FromString,
                     response_serializer=seedd__pb2.RunSeedsResponse.SerializeToString,
             ),
             'GetRegionSource': grpc.unary_unary_rpc_method_handler(
@@ -149,6 +165,33 @@ class SeedD(object):
             target,
             '/SeedD.SeedD/RunSeeds',
             seedd__pb2.RunSeedsRequest.SerializeToString,
+            seedd__pb2.RunSeedsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetMergedCoverage(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/SeedD.SeedD/GetMergedCoverage',
+            seedd__pb2.GetMergedCoverageRequest.SerializeToString,
             seedd__pb2.RunSeedsResponse.FromString,
             options,
             channel_credentials,

@@ -19,8 +19,8 @@ def _build_graph_from_json(json_str: str) -> nx.DiGraph:
     return G
 
 
-def get_current_callgraph(seedd: SeedD) -> nx.DiGraph:
-    resp = seedd.get_call_graph()
+def get_current_callgraph(seedd: SeedD, harness_binary: str) -> nx.DiGraph:
+    resp = seedd.get_call_graph(harness_binary)
     return _build_graph_from_json(resp.call_graph)
 
 

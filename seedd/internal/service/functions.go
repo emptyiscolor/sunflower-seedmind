@@ -32,7 +32,7 @@ func runGetCovAll(harnessBinary string) (string, error) {
 	defer os.Remove(seedFile)
 
 	getcovCmd := exec.Command("/getcov", "--all", "--", harnessBinary, seedFile)
-	getcovCmd.Dir = ArtifactDir
+	getcovCmd.Dir = artifactDir
 
 	output, err := getcovCmd.CombinedOutput()
 	if err != nil {

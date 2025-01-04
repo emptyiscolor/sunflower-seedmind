@@ -6,6 +6,7 @@ option go_package = "seedd/internal/runtime";
 
 service SeedD {
   rpc RunSeeds(RunSeedsRequest) returns (RunSeedsResponse);
+  rpc GetMergedCoverage(GetMergedCoverageRequest) returns (RunSeedsResponse);
   rpc GetRegionSource(GetRegionSourceRequest) returns (GetRegionSourceResponse);
   rpc ExtractFunctionSource(ExtractFunctionSourceRequest)
       returns (ExtractFunctionSourceResponse);
@@ -16,6 +17,10 @@ service SeedD {
 message RunSeedsRequest {
   string harness_binary = 1;
   repeated string seeds_path = 2;
+}
+
+message GetMergedCoverageRequest {
+  string harness_binary = 1;
 }
 
 message RunSeedsResponse {
@@ -48,7 +53,7 @@ message ExtractFunctionSourceResponse {
 }
 
 message GetCallGraphRequest {
-  // this request should be empty
+  string harness_binary = 1;
 }
 
 message GetCallGraphResponse {

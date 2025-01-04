@@ -128,9 +128,9 @@ class SeedD:
         return self.stub.ExtractFunctionSource(request, compression=grpc.Compression.Gzip)
 
     @grpc_call
-    def get_call_graph(self) -> seedd_pb2.GetCallGraphResponse:
+    def get_call_graph(self, harness_binary: str) -> seedd_pb2.GetCallGraphResponse:
         """Gets the call graph for a harness."""
-        request = seedd_pb2.GetCallGraphRequest()
+        request = seedd_pb2.GetCallGraphRequest(harness_binary=harness_binary)
         return self.stub.GetCallGraph(request, compression=grpc.Compression.Gzip)
 
     @grpc_call

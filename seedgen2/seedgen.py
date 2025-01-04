@@ -110,7 +110,7 @@ class SeedGenAgent:
             self.seedd, harness_info.source_code, self.harness_binary)
         current_script = first_result.generator_script
         current_doc = update_doc(
-            self.seedd, first_result.seed_evaluation_result, functions)
+            self.seedd, first_result.seed_evaluation_result, functions, self.harness_binary)
 
         # 2. Improve the script and documentation based on the current ones for X amount of rounds
         rounds = 2
@@ -119,7 +119,7 @@ class SeedGenAgent:
                 self.seedd, current_script, current_doc, self.harness_binary)
             current_script = current_result.generator_script
             current_doc = update_doc(
-                self.seedd, current_result.seed_evaluation_result, functions, current_doc)
+                self.seedd, current_result.seed_evaluation_result, functions, self.harness_binary, current_doc)
 
         # 3. Enhance the script using common file type information, while retaining the structure in the documentation
         filetype_result = self._generate_filetype_seeds(

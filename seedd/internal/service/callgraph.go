@@ -6,10 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
-	"sync"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -20,32 +21,40 @@ const (
 )
 
 type CallGraph struct {
-	mutex sync.Mutex
 	nodes map[string]map[string]struct{} // caller -> set of callees
 }
 
-var (
-	instance *CallGraph
-	once     sync.Once
-)
+func NewCallGraph() *CallGraph {
+	return &CallGraph{
+		nodes: make(map[string]map[string]struct{}),
+	}
+}
 
-func GetCallGraphInstance() *CallGraph {
-	once.Do(func() {
-		instance = &CallGraph{
-			nodes: make(map[string]map[string]struct{}),
+// dryRunSeeds executes each seed file with the harness binary to collect call graph information
+// Sets EXPORT_CALLS=1 environment variable for each run
+func (s *RunSeedsService) dryRunSeeds(harnessBinary string, seedsPaths []string) error {
+	s.callGraphUpdateMutex.Lock()
+	defer s.callGraphUpdateMutex.Unlock()
+
+	// set EXPORT_CALLS=1 and run the seeds with harness binary one by one, and collect the call graph
+	for _, seedPath := range seedsPaths {
+		os.Setenv("EXPORT_CALLS", "1")
+		cmd := exec.Command(harnessBinary, seedPath)
+		cmd.Run()
+
+		if _, exists := s.callGraphs[harnessBinary]; !exists {
+			s.callGraphs[harnessBinary] = NewCallGraph()
 		}
-	})
-	return instance
+		s.callGraphs[harnessBinary].Update()
+	}
+	return nil
 }
 
-type CallGraphService struct{}
+func (s *RunSeedsService) GetCallGraph(ctx context.Context, req *runtime.GetCallGraphRequest) (*runtime.GetCallGraphResponse, error) {
+	logger := log.Default()
+	logger.Printf("Getting call graph for harness binary: %s", req.HarnessBinary)
 
-func NewCallGraphService() *CallGraphService {
-	return &CallGraphService{}
-}
-
-func (s *CallGraphService) GetCallGraph(ctx context.Context, req *runtime.GetCallGraphRequest) (*runtime.GetCallGraphResponse, error) {
-	callGraph := GetCallGraphInstance()
+	callGraph := s.callGraphs[req.HarnessBinary]
 	nodes := callGraph.Export()
 	jsonData, err := json.Marshal(nodes)
 	if err != nil {
@@ -77,11 +86,7 @@ func isStdFunction(funcName string) bool {
 // UpdateCallGraph parses the call log and updates the call graph.
 // call log is a file that contains the call graph in the following format:
 // <tid>|<callee_name>|<caller_name>
-func UpdateCallGraph() error {
-	callGraph := GetCallGraphInstance()
-	callGraph.mutex.Lock()
-	defer callGraph.mutex.Unlock()
-
+func (callGraph *CallGraph) Update() error {
 	file, err := os.Open(CallLogFile)
 	if err != nil {
 		return err
@@ -177,9 +182,6 @@ func (s *CallGraph) addCall(callerName, calleeName string) {
 
 // Export returns a snapshot of the call graph.
 func (cg *CallGraph) Export() map[string][]string {
-	cg.mutex.Lock()
-	defer cg.mutex.Unlock()
-
 	nodes := make(map[string][]string, len(cg.nodes))
 	for caller, node := range cg.nodes {
 		calleeNames := make([]string, 0, len(node))

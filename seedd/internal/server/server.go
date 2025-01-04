@@ -20,7 +20,6 @@ type server struct {
 	runtime.UnimplementedSeedDServer
 	runSeedsService        *service.RunSeedsService
 	getRegionSourceService *service.GetRegionSourceService
-	getCallGraphService    *service.CallGraphService
 	getFunctionsService    *service.GetFunctionsService
 }
 
@@ -28,7 +27,6 @@ func newServer() *server {
 	return &server{
 		runSeedsService:        service.NewRunSeedsService(),
 		getRegionSourceService: service.NewGetRegionSourceService(),
-		getCallGraphService:    service.NewCallGraphService(),
 		getFunctionsService:    service.NewGetFunctionsService(),
 	}
 }
@@ -43,7 +41,7 @@ func (s *server) GetRegionSource(ctx context.Context, req *runtime.GetRegionSour
 }
 
 func (s *server) GetCallGraph(ctx context.Context, req *runtime.GetCallGraphRequest) (*runtime.GetCallGraphResponse, error) {
-	return s.getCallGraphService.GetCallGraph(ctx, req)
+	return s.runSeedsService.GetCallGraph(ctx, req)
 }
 
 // UNIMPLEMENTED

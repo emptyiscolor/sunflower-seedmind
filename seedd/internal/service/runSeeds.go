@@ -9,71 +9,63 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// Package service provides the core business logic for the BugBuster service
-
-// Constants for file system paths
+// Constants grouped by purpose
 const (
-	// ArtifactDir is the directory where artifacts are stored
-	ArtifactDir = "/out"
-	// GetCovBinary is the path to the getcov binary executable
-	GetCovBinary = "/getcov"
+	// FileSystem paths
+	artifactDir  = "/out"
+	getCovBinary = "/getcov"
 )
 
 // GetCovConfig holds the configuration for running coverage analysis
 type GetCovConfig struct {
-	harnessBinary string   // Path to the harness binary
-	seedsPaths    []string // List of paths to seed files
+	HarnessBinary string   // Path to the harness binary
+	SeedsPaths    []string // List of paths to seed files
 }
 
 // RunSeedsService implements the seed running service
-type RunSeedsService struct{}
+type RunSeedsService struct {
+	mergedProfdataPath map[string]string     // key: harness binary, value: merged profdata path
+	callGraphs         map[string]*CallGraph // key: harness binary, value: call graph
+
+	callGraphUpdateMutex sync.Mutex // when dry run seeds, ensure the call graph is updated atomically
+}
 
 // NewRunSeedsService creates a new instance of RunSeedsService
 func NewRunSeedsService() *RunSeedsService {
-	return &RunSeedsService{}
+	return &RunSeedsService{
+		mergedProfdataPath: make(map[string]string),
+		callGraphs:         make(map[string]*CallGraph),
+	}
 }
 
-// RunSeeds executes the seed files against the harness binary and collects coverage information
-// It performs validation, dry run, and coverage analysis using the getcov tool
+// RunSeeds executes the seed files and collects coverage information
 func (s *RunSeedsService) RunSeeds(ctx context.Context, req *runtime.RunSeedsRequest) (*runtime.RunSeedsResponse, error) {
-	log.Printf("Running seeds for harness binary: %s with %d seeds",
-		req.HarnessBinary, len(req.SeedsPath))
+	logger := log.Default() // Consider using a proper logging framework
+	logger.Printf("Running seeds for harness binary: %s with %d seeds", req.HarnessBinary, len(req.SeedsPath))
 
-	if err := validatePaths(req.HarnessBinary, req.SeedsPath); err != nil {
-		return nil, status.Error(codes.NotFound, err.Error())
-	}
-
-	if err := dryRunSeeds(req.HarnessBinary, req.SeedsPath); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	if err := checkGetCovBinary(); err != nil {
-		return nil, status.Error(codes.Unavailable, err.Error())
+	if err := s.validateAndPrepare(req.HarnessBinary, req.SeedsPath); err != nil {
+		return nil, err
 	}
 
 	config := GetCovConfig{
-		harnessBinary: req.HarnessBinary,
-		seedsPaths:    req.SeedsPath,
+		HarnessBinary: req.HarnessBinary,
+		SeedsPaths:    req.SeedsPath,
 	}
 
-	hybrid_output, err := config.runGetCov()
+	coverage, report, profdataPath, err := config.runGetCovAndParse()
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	// Split the hybrid output into coverage and report
-	parts := strings.Split(hybrid_output, "\n<<<JSON_OUTPUT_END>>>\n")
-	if len(parts) != 2 {
-		return nil, status.Error(codes.Internal, "invalid output format from getcov")
+	if err := s.mergeProfdata(req.HarnessBinary, profdataPath); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-
-	coverage := parts[0]
-	report := parts[1]
 
 	return &runtime.RunSeedsResponse{
 		Coverage: coverage,
@@ -81,12 +73,109 @@ func (s *RunSeedsService) RunSeeds(ctx context.Context, req *runtime.RunSeedsReq
 	}, nil
 }
 
+// validateAndPrepare combines all preparation steps
+func (s *RunSeedsService) validateAndPrepare(harnessBinary string, seedsPaths []string) error {
+	if err := validatePaths(harnessBinary, seedsPaths); err != nil {
+		return status.Error(codes.NotFound, err.Error())
+	}
+
+	if err := s.dryRunSeeds(harnessBinary, seedsPaths); err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+
+	if err := checkGetCovBinary(); err != nil {
+		return status.Error(codes.Unavailable, err.Error())
+	}
+
+	return nil
+}
+
+// runGetCovAndParse executes getcov and parses its output
+func (c *GetCovConfig) runGetCovAndParse() (coverage, report, profdataPath string, err error) {
+	output, err := c.runGetCov()
+	if err != nil {
+		return "", "", "", err
+	}
+
+	return parseGetCovOutput(output)
+}
+
+// parseGetCovOutput parses the output from getcov into its components
+func parseGetCovOutput(output string) (coverage, report, profdataPath string, err error) {
+	parts := strings.Split(output, "\n<<<JSON_OUTPUT_END>>>\n")
+	if len(parts) != 2 {
+		return "", "", "", fmt.Errorf("invalid output format from getcov")
+	}
+
+	coverage = parts[0]
+	remainingOutput := parts[1]
+
+	parts = strings.Split(remainingOutput, "\n<<<TEXT_OUTPUT_END>>>\n")
+	if len(parts) != 2 {
+		return "", "", "", fmt.Errorf("invalid output format from getcov")
+	}
+
+	profdataPath = strings.TrimSpace(parts[1])
+
+	return coverage, parts[0], profdataPath, nil
+}
+
+func (s *RunSeedsService) GetMergedCoverage(ctx context.Context, req *runtime.GetMergedCoverageRequest) (*runtime.RunSeedsResponse, error) {
+	log.Printf("Getting merged coverage for harness binary: %s", req.HarnessBinary)
+
+	if _, ok := s.mergedProfdataPath[req.HarnessBinary]; !ok {
+		return nil, status.Error(codes.NotFound, "merged profdata path not found")
+	}
+
+	mergedProfdataPath := s.mergedProfdataPath[req.HarnessBinary]
+
+	getcovCmd := exec.Command(getCovBinary, "--hybrid", "--profdata", mergedProfdataPath, "--", req.HarnessBinary, "@@")
+	getcovCmd.Dir = artifactDir
+
+	output, err := getcovCmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Error: failed to run getcov: %v\nOutput: %s", err, string(output))
+		return nil, status.Errorf(codes.Internal, "failed to run getcov: %v\nOutput: %s", err, string(output))
+	}
+
+	coverage, report, _, err := parseGetCovOutput(string(output))
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to parse getcov output: %v", err)
+	}
+
+	return &runtime.RunSeedsResponse{
+		Coverage: coverage,
+		Report:   report,
+	}, nil
+}
+
+// Merge provided profdata file to the merged_profdata_path
+func (s *RunSeedsService) mergeProfdata(harnessBinary string, profdataPath string) error {
+	// check if merged_profdata_path contains the harnessBinary
+	if mergedProfdataPath, ok := s.mergedProfdataPath[harnessBinary]; ok {
+		// merge the profdata file to the merged_profdata_path
+		// run `llvm-profdata merge -o <merged.profdata> <profdata_path> <merged.profdata>`
+		cmd := exec.Command("llvm-profdata", "merge", "-o", mergedProfdataPath, profdataPath, mergedProfdataPath)
+		return cmd.Run()
+	} else {
+		// create a new merged_profdata_path for the harnessBinary
+		mergedProfdataFilename := fmt.Sprintf("merged_%s.profdata", harnessBinary)
+		mergedProfdataPath := filepath.Join(artifactDir, mergedProfdataFilename)
+		s.mergedProfdataPath[harnessBinary] = mergedProfdataPath
+		// copy the profdata file to the merged_profdata_path
+		if err := copyFile(profdataPath, mergedProfdataPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // validatePaths checks if all required files exist and paths are valid
 // It verifies both the harness binary and seed files
 func validatePaths(harnessBinary string, seedsPaths []string) error {
 	// Check if harness binary is an absolute path
 	if !filepath.IsAbs(harnessBinary) {
-		harnessBinary = filepath.Join(ArtifactDir, harnessBinary)
+		harnessBinary = filepath.Join(artifactDir, harnessBinary)
 	}
 
 	// Check if harness binary exists
@@ -109,7 +198,7 @@ func validatePaths(harnessBinary string, seedsPaths []string) error {
 // checkGetCovBinary verifies that the getcov binary exists and is accessible
 func checkGetCovBinary() error {
 	// Check if getcov binary exists in PATH
-	if _, err := os.Stat(GetCovBinary); os.IsNotExist(err) {
+	if _, err := os.Stat(getCovBinary); os.IsNotExist(err) {
 		log.Printf("Error: getcov binary not found")
 		return fmt.Errorf("getcov binary not found")
 	}
@@ -119,7 +208,7 @@ func checkGetCovBinary() error {
 // runGetCov executes the getcov tool with the provided configuration
 // It creates a temporary directory for seeds, runs the analysis, and returns the output
 func (c *GetCovConfig) runGetCov() (string, error) {
-	tmpDir, err := prepareSeedDirectory(c.seedsPaths)
+	tmpDir, err := prepareSeedDirectory(c.SeedsPaths)
 	if err != nil {
 		return "", err
 	}
@@ -128,11 +217,11 @@ func (c *GetCovConfig) runGetCov() (string, error) {
 	// Prepare command line arguments for getcov
 	args := []string{"-i", tmpDir}
 	args = append(args, "--hybrid")
-	args = append(args, "--", c.harnessBinary, "@@")
+	args = append(args, "--", c.HarnessBinary, "@@")
 
 	// Execute getcov command
-	getcovCmd := exec.Command(GetCovBinary, args...)
-	getcovCmd.Dir = ArtifactDir
+	getcovCmd := exec.Command(getCovBinary, args...)
+	getcovCmd.Dir = artifactDir
 
 	output, err := getcovCmd.CombinedOutput()
 	if err != nil {
@@ -165,19 +254,6 @@ func prepareSeedDirectory(seedsPaths []string) (string, error) {
 	}
 
 	return tmpDir, nil
-}
-
-// dryRunSeeds executes each seed file with the harness binary to collect call graph information
-// Sets EXPORT_CALLS=1 environment variable for each run
-func dryRunSeeds(harnessBinary string, seedsPaths []string) error {
-	// set EXPORT_CALLS=1 and run the seeds with harness binary one by one, and collect the call graph
-	for _, seedPath := range seedsPaths {
-		os.Setenv("EXPORT_CALLS", "1")
-		cmd := exec.Command(harnessBinary, seedPath)
-		cmd.Run()
-		UpdateCallGraph()
-	}
-	return nil
 }
 
 // copyFile copies a file from src to dst

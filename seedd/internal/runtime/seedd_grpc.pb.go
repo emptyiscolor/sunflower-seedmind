@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	SeedD_RunSeeds_FullMethodName              = "/SeedD.SeedD/RunSeeds"
+	SeedD_GetMergedCoverage_FullMethodName     = "/SeedD.SeedD/GetMergedCoverage"
 	SeedD_GetRegionSource_FullMethodName       = "/SeedD.SeedD/GetRegionSource"
 	SeedD_ExtractFunctionSource_FullMethodName = "/SeedD.SeedD/ExtractFunctionSource"
 	SeedD_GetCallGraph_FullMethodName          = "/SeedD.SeedD/GetCallGraph"
@@ -31,6 +32,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SeedDClient interface {
 	RunSeeds(ctx context.Context, in *RunSeedsRequest, opts ...grpc.CallOption) (*RunSeedsResponse, error)
+	GetMergedCoverage(ctx context.Context, in *GetMergedCoverageRequest, opts ...grpc.CallOption) (*RunSeedsResponse, error)
 	GetRegionSource(ctx context.Context, in *GetRegionSourceRequest, opts ...grpc.CallOption) (*GetRegionSourceResponse, error)
 	ExtractFunctionSource(ctx context.Context, in *ExtractFunctionSourceRequest, opts ...grpc.CallOption) (*ExtractFunctionSourceResponse, error)
 	GetCallGraph(ctx context.Context, in *GetCallGraphRequest, opts ...grpc.CallOption) (*GetCallGraphResponse, error)
@@ -49,6 +51,16 @@ func (c *seedDClient) RunSeeds(ctx context.Context, in *RunSeedsRequest, opts ..
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RunSeedsResponse)
 	err := c.cc.Invoke(ctx, SeedD_RunSeeds_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *seedDClient) GetMergedCoverage(ctx context.Context, in *GetMergedCoverageRequest, opts ...grpc.CallOption) (*RunSeedsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunSeedsResponse)
+	err := c.cc.Invoke(ctx, SeedD_GetMergedCoverage_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +112,7 @@ func (c *seedDClient) GetFunctions(ctx context.Context, in *GetFunctionsRequest,
 // for forward compatibility.
 type SeedDServer interface {
 	RunSeeds(context.Context, *RunSeedsRequest) (*RunSeedsResponse, error)
+	GetMergedCoverage(context.Context, *GetMergedCoverageRequest) (*RunSeedsResponse, error)
 	GetRegionSource(context.Context, *GetRegionSourceRequest) (*GetRegionSourceResponse, error)
 	ExtractFunctionSource(context.Context, *ExtractFunctionSourceRequest) (*ExtractFunctionSourceResponse, error)
 	GetCallGraph(context.Context, *GetCallGraphRequest) (*GetCallGraphResponse, error)
@@ -116,6 +129,9 @@ type UnimplementedSeedDServer struct{}
 
 func (UnimplementedSeedDServer) RunSeeds(context.Context, *RunSeedsRequest) (*RunSeedsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunSeeds not implemented")
+}
+func (UnimplementedSeedDServer) GetMergedCoverage(context.Context, *GetMergedCoverageRequest) (*RunSeedsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetMergedCoverage not implemented")
 }
 func (UnimplementedSeedDServer) GetRegionSource(context.Context, *GetRegionSourceRequest) (*GetRegionSourceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRegionSource not implemented")
@@ -164,6 +180,24 @@ func _SeedD_RunSeeds_Handler(srv interface{}, ctx context.Context, dec func(inte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SeedDServer).RunSeeds(ctx, req.(*RunSeedsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SeedD_GetMergedCoverage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMergedCoverageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeedDServer).GetMergedCoverage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeedD_GetMergedCoverage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeedDServer).GetMergedCoverage(ctx, req.(*GetMergedCoverageRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -250,6 +284,10 @@ var SeedD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunSeeds",
 			Handler:    _SeedD_RunSeeds_Handler,
+		},
+		{
+			MethodName: "GetMergedCoverage",
+			Handler:    _SeedD_GetMergedCoverage_Handler,
 		},
 		{
 			MethodName: "GetRegionSource",
