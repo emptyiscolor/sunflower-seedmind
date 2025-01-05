@@ -12,12 +12,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type GetFunctionsService struct{}
-
-func NewGetFunctionsService() *GetFunctionsService {
-	return &GetFunctionsService{}
-}
-
 func runGetCovAll(harnessBinary string) (string, error) {
 	// Create a temporary seed file, use /tmp/getcov-hi
 	seedFile := "/tmp/getcov-hi"
@@ -42,7 +36,7 @@ func runGetCovAll(harnessBinary string) (string, error) {
 	return string(output), nil
 }
 
-func (s *GetFunctionsService) GetFunctions(ctx context.Context, req *runtime.GetFunctionsRequest) (*runtime.GetFunctionsResponse, error) {
+func GetFunctions(ctx context.Context, req *runtime.GetFunctionsRequest) (*runtime.GetFunctionsResponse, error) {
 	log.Printf("GetFunctions request received: %+v", req)
 
 	if err := checkGetCovBinary(); err != nil {

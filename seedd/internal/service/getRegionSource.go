@@ -13,13 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type GetRegionSourceService struct{}
-
-func NewGetRegionSourceService() *GetRegionSourceService {
-	return &GetRegionSourceService{}
-}
-
-func (s *GetRegionSourceService) GetRegionSource(ctx context.Context, req *runtime.GetRegionSourceRequest) (*runtime.GetRegionSourceResponse, error) {
+func GetRegionSource(ctx context.Context, req *runtime.GetRegionSourceRequest) (*runtime.GetRegionSourceResponse, error) {
 	log.Printf("GetRegionSource request received: %+v", req)
 
 	if err := validatePath(req.Filepath); err != nil {
