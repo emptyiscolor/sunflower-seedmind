@@ -27,13 +27,15 @@ const (
 // Server represents the gRPC server implementation
 type Server struct {
 	runtime.UnimplementedSeedDServer
-	runSeedsService *service.RunSeedsService
+	runSeedsService         *service.RunSeedsService
+	compilationDatabasePath string
 }
 
 // NewServer creates a new instance of the Server
-func NewServer() *Server {
+func NewServer(compilationDatabasePath string) *Server {
 	return &Server{
-		runSeedsService: service.NewRunSeedsService(),
+		runSeedsService:         service.NewRunSeedsService(),
+		compilationDatabasePath: compilationDatabasePath,
 	}
 }
 
@@ -146,7 +148,7 @@ func (s *Server) GetFunctions(ctx context.Context, req *runtime.GetFunctionsRequ
 }
 
 // Serve starts the gRPC server with graceful shutdown support
-func Serve(ctx context.Context) error {
+func Serve(ctx context.Context, compilation_database_path string) error {
 	addr := fmt.Sprintf(":%d", DefaultPort)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -159,7 +161,7 @@ func Serve(ctx context.Context) error {
 	}
 
 	grpcServer := grpc.NewServer(opts...)
-	runtime.RegisterSeedDServer(grpcServer, NewServer())
+	runtime.RegisterSeedDServer(grpcServer, NewServer(compilation_database_path))
 
 	// Setup health check
 	healthServer := health.NewServer()
