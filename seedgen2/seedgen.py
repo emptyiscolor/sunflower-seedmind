@@ -13,7 +13,9 @@ from seedgen2.utils.generators import SeedGeneratorStore
 from seedgen2.utils.functions import get_functions, FunctionInfo
 
 import logging
+import os
 
+from seedgen2.utils.seeds import get_merged_coverage
 from seedgen2.utils.tracker import Tracker
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
@@ -110,7 +112,7 @@ class SeedGenAgent:
             self.seedd, harness_info.source_code, self.harness_binary)
         current_script = first_result.generator_script
         current_doc = update_doc(
-            self.seedd, first_result.seed_evaluation_result, functions)
+            self.seedd, first_result.seed_evaluation_result, functions, self.harness_binary)
 
         # 2. Improve the script and documentation based on the current ones for X amount of rounds
         rounds = 2
@@ -119,8 +121,14 @@ class SeedGenAgent:
                 self.seedd, current_script, current_doc, self.harness_binary)
             current_script = current_result.generator_script
             current_doc = update_doc(
-                self.seedd, current_result.seed_evaluation_result, functions, current_doc)
+                self.seedd, current_result.seed_evaluation_result, functions, self.harness_binary, current_doc)
 
         # 3. Enhance the script using common file type information, while retaining the structure in the documentation
         filetype_result = self._generate_filetype_seeds(
             current_script, current_doc, harness_info)
+
+        # Finally, evaluate the coverage
+        merged_coverage_report = get_merged_coverage(self.seedd, self.harness_binary)
+        with open(os.path.join(self.result_dir, "merged_coverage.txt"), "w") as f:
+            f.write(str(merged_coverage_report.coverage_info))
+            f.write(str(merged_coverage_report.report))

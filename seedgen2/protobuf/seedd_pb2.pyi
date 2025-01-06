@@ -32,18 +32,37 @@ class RunSeedsRequest(google.protobuf.message.Message):
 global___RunSeedsRequest = RunSeedsRequest
 
 @typing.final
+class GetMergedCoverageRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    HARNESS_BINARY_FIELD_NUMBER: builtins.int
+    harness_binary: builtins.str
+    def __init__(
+        self,
+        *,
+        harness_binary: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["harness_binary", b"harness_binary"]) -> None: ...
+
+global___GetMergedCoverageRequest = GetMergedCoverageRequest
+
+@typing.final
 class RunSeedsResponse(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     COVERAGE_FIELD_NUMBER: builtins.int
+    REPORT_FIELD_NUMBER: builtins.int
     coverage: builtins.str
     """coverage will be return in JSON format"""
+    report: builtins.str
+    """report will be return in plain text format"""
     def __init__(
         self,
         *,
         coverage: builtins.str = ...,
+        report: builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["coverage", b"coverage"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["coverage", b"coverage", "report", b"report"]) -> None: ...
 
 global___RunSeedsResponse = RunSeedsResponse
 
@@ -136,13 +155,16 @@ global___ExtractFunctionSourceResponse = ExtractFunctionSourceResponse
 
 @typing.final
 class GetCallGraphRequest(google.protobuf.message.Message):
-    """this request should be empty"""
-
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    HARNESS_BINARY_FIELD_NUMBER: builtins.int
+    harness_binary: builtins.str
     def __init__(
         self,
+        *,
+        harness_binary: builtins.str = ...,
     ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["harness_binary", b"harness_binary"]) -> None: ...
 
 global___GetCallGraphRequest = GetCallGraphRequest
 

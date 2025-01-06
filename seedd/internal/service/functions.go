@@ -1,22 +1,17 @@
 package service
 
 import (
+	"BugBuster/SeedD/internal/logging"
 	"BugBuster/SeedD/internal/runtime"
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-type GetFunctionsService struct{}
-
-func NewGetFunctionsService() *GetFunctionsService {
-	return &GetFunctionsService{}
-}
 
 func runGetCovAll(harnessBinary string) (string, error) {
 	// Create a temporary seed file, use /tmp/getcov-hi
@@ -32,7 +27,7 @@ func runGetCovAll(harnessBinary string) (string, error) {
 	defer os.Remove(seedFile)
 
 	getcovCmd := exec.Command("/getcov", "--all", "--", harnessBinary, seedFile)
-	getcovCmd.Dir = ArtifactDir
+	getcovCmd.Dir = artifactDir
 
 	output, err := getcovCmd.CombinedOutput()
 	if err != nil {
@@ -42,15 +37,25 @@ func runGetCovAll(harnessBinary string) (string, error) {
 	return string(output), nil
 }
 
-func (s *GetFunctionsService) GetFunctions(ctx context.Context, req *runtime.GetFunctionsRequest) (*runtime.GetFunctionsResponse, error) {
-	log.Printf("GetFunctions request received: %+v", req)
+func GetFunctions(ctx context.Context, req *runtime.GetFunctionsRequest) (*runtime.GetFunctionsResponse, error) {
+	logger := logging.Logger.With(
+		zap.String("harness_binary", req.HarnessBinary),
+	)
 
 	if err := checkGetCovBinary(); err != nil {
+		logger.Error("Failed to check getcov binary",
+			zap.String("harness_binary", req.HarnessBinary),
+			zap.Error(err),
+		)
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
 
 	output, err := runGetCovAll(req.HarnessBinary)
 	if err != nil {
+		logger.Error("Failed to run getcov",
+			zap.String("harness_binary", req.HarnessBinary),
+			zap.Error(err),
+		)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 

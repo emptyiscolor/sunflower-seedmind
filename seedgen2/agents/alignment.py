@@ -75,6 +75,7 @@ def update_doc(
         seedd: SeedD,
         seed_feedback: SeedFeedback,
         functions: List[FunctionInfo],
+        harness_binary: str,
         previous_doc: str = "",
 ) -> str:
     entrance_function = next(
@@ -88,7 +89,7 @@ def update_doc(
         return
 
     related_functions = get_related_functions(
-        seedd, functions, entrance_function.function_name)
+        seedd, functions, harness_binary, entrance_function.function_name)
 
     model = SeedGen2GenerativeModel().model
 

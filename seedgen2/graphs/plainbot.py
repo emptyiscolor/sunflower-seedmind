@@ -1,3 +1,4 @@
+import logging
 from langchain_core.messages import HumanMessage, AnyMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -59,7 +60,9 @@ class Plainbot:
             messages=[],
             response_content='',
         )
+        logging.info(f"Running plainbot with prompt: {prompt[:100]}...")
         result = graph.invoke(initial_state)
+        logging.info(f"Plainbot finished")
 
         tracker = Tracker()
         tracker.add_trace(

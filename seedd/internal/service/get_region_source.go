@@ -1,6 +1,7 @@
 package service
 
 import (
+	"BugBuster/SeedD/internal/logging"
 	"BugBuster/SeedD/internal/runtime"
 	"context"
 	"fmt"
@@ -9,21 +10,23 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-type GetRegionSourceService struct{}
-
-func NewGetRegionSourceService() *GetRegionSourceService {
-	return &GetRegionSourceService{}
-}
-
-func (s *GetRegionSourceService) GetRegionSource(ctx context.Context, req *runtime.GetRegionSourceRequest) (*runtime.GetRegionSourceResponse, error) {
-	log.Printf("GetRegionSource request received: %+v", req)
+func GetRegionSource(ctx context.Context, req *runtime.GetRegionSourceRequest) (*runtime.GetRegionSourceResponse, error) {
+	logger := logging.Logger.With(
+		zap.String("filepath", req.Filepath),
+		zap.Uint64("start_line", req.StartLine),
+		zap.Uint64("end_line", req.EndLine),
+	)
 
 	if err := validatePath(req.Filepath); err != nil {
-		log.Printf("Error validating path: %v", err)
+		logger.Error("Error validating path",
+			zap.String("filepath", req.Filepath),
+			zap.Error(err),
+		)
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
 
@@ -31,7 +34,10 @@ func (s *GetRegionSourceService) GetRegionSource(ctx context.Context, req *runti
 	if req.StartLine == 0 && req.StartColumn == 0 && req.EndLine == 0 && req.EndColumn == 0 {
 		content, err := os.ReadFile(req.Filepath)
 		if err != nil {
-			log.Printf("Error reading file: %v", err)
+			logger.Error("Error reading file",
+				zap.String("filepath", req.Filepath),
+				zap.Error(err),
+			)
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 		return &runtime.GetRegionSourceResponse{
@@ -41,11 +47,13 @@ func (s *GetRegionSourceService) GetRegionSource(ctx context.Context, req *runti
 
 	source, err := getRegionSource(req.Filepath, req.StartLine, req.StartColumn, req.EndLine, req.EndColumn)
 	if err != nil {
-		log.Printf("Error getting region source: %v", err)
+		logger.Error("Error getting region source",
+			zap.String("filepath", req.Filepath),
+			zap.Error(err),
+		)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	log.Printf("Region source retrieved successfully")
 	return &runtime.GetRegionSourceResponse{
 		Source: source,
 	}, nil

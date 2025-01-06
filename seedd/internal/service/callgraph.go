@@ -1,16 +1,19 @@
 package service
 
 import (
+	"BugBuster/SeedD/internal/logging"
 	"BugBuster/SeedD/internal/runtime"
 	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -19,36 +22,69 @@ const (
 	CallLogFile = "/tmp/callgraph.log"
 )
 
+// CallGraph represents a directed graph of function calls
 type CallGraph struct {
-	mutex sync.Mutex
+	mu    sync.RWMutex
 	nodes map[string]map[string]struct{} // caller -> set of callees
 }
 
-var (
-	instance *CallGraph
-	once     sync.Once
-)
+// Call represents a single call in the call log
+type Call struct {
+	ThreadID   int
+	CalleeName string
+	CallerName string
+}
 
-func GetCallGraphInstance() *CallGraph {
-	once.Do(func() {
-		instance = &CallGraph{
-			nodes: make(map[string]map[string]struct{}),
+// NewCallGraph creates and initializes a new CallGraph
+func NewCallGraph() *CallGraph {
+	return &CallGraph{
+		nodes: make(map[string]map[string]struct{}),
+	}
+}
+
+// dryRunSeeds executes each seed file with the harness binary to collect call graph information
+// Sets EXPORT_CALLS=1 environment variable for each run
+func (s *RunSeedsService) dryRunSeeds(harnessBinary string, seedsPaths []string) error {
+	s.callGraphUpdateMutex.Lock()
+	defer s.callGraphUpdateMutex.Unlock()
+
+	logger := logging.Logger
+	logger.Info("Dry running seeds",
+		zap.String("harness_binary", harnessBinary),
+		zap.Int("seeds_count", len(seedsPaths)),
+	)
+
+	// set EXPORT_CALLS=1 and run the seeds with harness binary one by one, and collect the call graph
+	for _, seedPath := range seedsPaths {
+		os.Setenv("EXPORT_CALLS", "1")
+		cmd := exec.Command(harnessBinary, seedPath)
+		cmd.Run()
+
+		if _, exists := s.callGraphs[harnessBinary]; !exists {
+			s.callGraphs[harnessBinary] = NewCallGraph()
 		}
-	})
-	return instance
+		s.callGraphs[harnessBinary].Update()
+	}
+
+	logger.Info("Dry run seeds completed",
+		zap.String("harness_binary", harnessBinary),
+		zap.Int("seeds_count", len(seedsPaths)),
+	)
+	return nil
 }
 
-type CallGraphService struct{}
-
-func NewCallGraphService() *CallGraphService {
-	return &CallGraphService{}
-}
-
-func (s *CallGraphService) GetCallGraph(ctx context.Context, req *runtime.GetCallGraphRequest) (*runtime.GetCallGraphResponse, error) {
-	callGraph := GetCallGraphInstance()
+func (s *RunSeedsService) GetCallGraph(ctx context.Context, req *runtime.GetCallGraphRequest) (*runtime.GetCallGraphResponse, error) {
+	logger := logging.Logger.With(
+		zap.String("harness_binary", req.HarnessBinary),
+	)
+	callGraph := s.callGraphs[req.HarnessBinary]
 	nodes := callGraph.Export()
 	jsonData, err := json.Marshal(nodes)
 	if err != nil {
+		logger.Error("Failed to serialize call graph to JSON",
+			zap.String("harness_binary", req.HarnessBinary),
+			zap.Error(err),
+		)
 		return nil, status.Errorf(codes.Internal, "failed to serialize call graph to JSON: %v", err)
 	}
 	response := &runtime.GetCallGraphResponse{
@@ -74,26 +110,48 @@ func isStdFunction(funcName string) bool {
 	return false
 }
 
-// UpdateCallGraph parses the call log and updates the call graph.
-// call log is a file that contains the call graph in the following format:
-// <tid>|<callee_name>|<caller_name>
-func UpdateCallGraph() error {
-	callGraph := GetCallGraphInstance()
-	callGraph.mutex.Lock()
-	defer callGraph.mutex.Unlock()
+// Update parses the call log and updates the call graph.
+// Format: <tid>|<callee_name>|<caller_name>
+func (cg *CallGraph) Update() error {
+	cg.mu.Lock()
+	defer cg.mu.Unlock()
 
 	file, err := os.Open(CallLogFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("opening call log: %w", err)
 	}
 	defer file.Close()
 
-	type Call struct {
-		ThreadID   int
-		CalleeName string
-		CallerName string
+	calls, err := parseCallLog(file)
+	if err != nil {
+		return fmt.Errorf("parsing call log: %w", err)
 	}
 
+	return cg.processCalls(calls)
+}
+
+// Export returns a thread-safe snapshot of the call graph
+func (cg *CallGraph) Export() map[string][]string {
+	cg.mu.RLock()
+	defer cg.mu.RUnlock()
+
+	nodes := make(map[string][]string, len(cg.nodes))
+	for caller, callees := range cg.nodes {
+		nodes[caller] = mapToSlice(callees)
+	}
+	return nodes
+}
+
+// addCall adds a caller-callee relationship to the call graph
+func (cg *CallGraph) addCall(caller, callee string) {
+	if _, exists := cg.nodes[caller]; !exists {
+		cg.nodes[caller] = make(map[string]struct{})
+	}
+	cg.nodes[caller][callee] = struct{}{}
+}
+
+// parseCallLog reads the call log file and returns a list of calls
+func parseCallLog(file *os.File) ([]Call, error) {
 	var calls []Call
 
 	scanner := bufio.NewScanner(file)
@@ -120,9 +178,14 @@ func UpdateCallGraph() error {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return err
+		return nil, err
 	}
 
+	return calls, nil
+}
+
+// processCalls processes the list of calls and updates the call graph
+func (cg *CallGraph) processCalls(calls []Call) error {
 	callsPerThread := make(map[int][]Call)
 	for _, call := range calls {
 		callsPerThread[call.ThreadID] = append(callsPerThread[call.ThreadID], call)
@@ -140,7 +203,7 @@ func UpdateCallGraph() error {
 
 			if !calleeIsStd && !callerIsStd {
 				// Both callee and caller are user-defined
-				callGraph.addCall(caller, callee)
+				cg.addCall(caller, callee)
 			} else if !callerIsStd && calleeIsStd {
 				// Caller is user-defined, callee is standard
 				// In this case, we log the caller for future tracking
@@ -156,7 +219,7 @@ func UpdateCallGraph() error {
 				// Caller is standard, callee is user-defined
 				// In this case, we add the parent caller to the call graph
 				if parent_caller, exists := callerOf[caller]; exists {
-					callGraph.addCall(parent_caller, callee)
+					cg.addCall(parent_caller, callee)
 				} else {
 					fmt.Println("No parent caller found for callee:", callee)
 				}
@@ -167,26 +230,11 @@ func UpdateCallGraph() error {
 	return nil
 }
 
-// addCall adds a caller-callee relationship to the call graph.
-func (s *CallGraph) addCall(callerName, calleeName string) {
-	if _, exists := s.nodes[callerName]; !exists {
-		s.nodes[callerName] = make(map[string]struct{})
+// mapToSlice converts a map to a slice of strings
+func mapToSlice(m map[string]struct{}) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
 	}
-	s.nodes[callerName][calleeName] = struct{}{}
-}
-
-// Export returns a snapshot of the call graph.
-func (cg *CallGraph) Export() map[string][]string {
-	cg.mutex.Lock()
-	defer cg.mutex.Unlock()
-
-	nodes := make(map[string][]string, len(cg.nodes))
-	for caller, node := range cg.nodes {
-		calleeNames := make([]string, 0, len(node))
-		for callee := range node {
-			calleeNames = append(calleeNames, callee)
-		}
-		nodes[caller] = calleeNames
-	}
-	return nodes
+	return keys
 }
