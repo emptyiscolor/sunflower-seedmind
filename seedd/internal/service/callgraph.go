@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -75,13 +74,17 @@ func (s *RunSeedsService) dryRunSeeds(harnessBinary string, seedsPaths []string)
 }
 
 func (s *RunSeedsService) GetCallGraph(ctx context.Context, req *runtime.GetCallGraphRequest) (*runtime.GetCallGraphResponse, error) {
-	logger := log.Default()
-	logger.Printf("Getting call graph for harness binary: %s", req.HarnessBinary)
-
+	logger := logging.Logger.With(
+		zap.String("harness_binary", req.HarnessBinary),
+	)
 	callGraph := s.callGraphs[req.HarnessBinary]
 	nodes := callGraph.Export()
 	jsonData, err := json.Marshal(nodes)
 	if err != nil {
+		logger.Error("Failed to serialize call graph to JSON",
+			zap.String("harness_binary", req.HarnessBinary),
+			zap.Error(err),
+		)
 		return nil, status.Errorf(codes.Internal, "failed to serialize call graph to JSON: %v", err)
 	}
 	response := &runtime.GetCallGraphResponse{

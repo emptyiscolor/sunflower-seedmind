@@ -1,13 +1,14 @@
 package service
 
 import (
+	"BugBuster/SeedD/internal/logging"
 	"BugBuster/SeedD/internal/runtime"
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -37,14 +38,24 @@ func runGetCovAll(harnessBinary string) (string, error) {
 }
 
 func GetFunctions(ctx context.Context, req *runtime.GetFunctionsRequest) (*runtime.GetFunctionsResponse, error) {
-	log.Printf("GetFunctions request received: %+v", req)
+	logger := logging.Logger.With(
+		zap.String("harness_binary", req.HarnessBinary),
+	)
 
 	if err := checkGetCovBinary(); err != nil {
+		logger.Error("Failed to check getcov binary",
+			zap.String("harness_binary", req.HarnessBinary),
+			zap.Error(err),
+		)
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
 
 	output, err := runGetCovAll(req.HarnessBinary)
 	if err != nil {
+		logger.Error("Failed to run getcov",
+			zap.String("harness_binary", req.HarnessBinary),
+			zap.Error(err),
+		)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 

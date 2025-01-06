@@ -27,124 +27,41 @@ const (
 // Server represents the gRPC server implementation
 type Server struct {
 	runtime.UnimplementedSeedDServer
-	runSeedsService         *service.RunSeedsService
-	compilationDatabasePath string
+	runSeedsService *service.RunSeedsService
 }
 
 // NewServer creates a new instance of the Server
 func NewServer(compilationDatabasePath string) *Server {
 	return &Server{
-		runSeedsService:         service.NewRunSeedsService(),
-		compilationDatabasePath: compilationDatabasePath,
+		runSeedsService: service.NewRunSeedsService(),
 	}
 }
 
 // RunSeeds delegates the seed running operation to the RunSeedsService
 func (s *Server) RunSeeds(ctx context.Context, req *runtime.RunSeedsRequest) (*runtime.RunSeedsResponse, error) {
-	logging.Logger.Info("Running seeds",
-		zap.String("harness_binary", req.HarnessBinary),
-		zap.Int("seeds_count", len(req.SeedsPath)),
-	)
-
-	resp, err := s.runSeedsService.RunSeeds(ctx, req)
-	if err != nil {
-		logging.Logger.Error("Failed to run seeds",
-			zap.String("harness_binary", req.HarnessBinary),
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	logging.Logger.Info("Successfully ran seeds",
-		zap.String("harness_binary", req.HarnessBinary),
-	)
-	return resp, nil
-}
-
-// GetRegionSource retrieves the source code for a specific region
-func (s *Server) GetRegionSource(ctx context.Context, req *runtime.GetRegionSourceRequest) (*runtime.GetRegionSourceResponse, error) {
-	logging.Logger.Info("Getting region source",
-		zap.String("filepath", req.Filepath),
-		zap.Uint64("start_line", req.StartLine),
-		zap.Uint64("end_line", req.EndLine),
-	)
-
-	resp, err := service.GetRegionSource(ctx, req)
-	if err != nil {
-		logging.Logger.Error("Failed to get region source",
-			zap.String("filepath", req.Filepath),
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	logging.Logger.Info("Successfully retrieved region source",
-		zap.String("filepath", req.Filepath),
-	)
-	return resp, nil
-}
-
-// GetCallGraph retrieves the call graph for the specified request
-func (s *Server) GetCallGraph(ctx context.Context, req *runtime.GetCallGraphRequest) (*runtime.GetCallGraphResponse, error) {
-	logging.Logger.Info("Getting call graph",
-		zap.String("harness_binary", req.HarnessBinary),
-	)
-
-	resp, err := s.runSeedsService.GetCallGraph(ctx, req)
-	if err != nil {
-		logging.Logger.Error("Failed to get call graph",
-			zap.String("harness_binary", req.HarnessBinary),
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	logging.Logger.Info("Successfully retrieved call graph",
-		zap.String("harness_binary", req.HarnessBinary),
-	)
-	return resp, nil
+	return s.runSeedsService.RunSeeds(ctx, req)
 }
 
 // GetMergedCoverage retrieves merged coverage information
 func (s *Server) GetMergedCoverage(ctx context.Context, req *runtime.GetMergedCoverageRequest) (*runtime.RunSeedsResponse, error) {
-	logging.Logger.Info("Getting merged coverage",
-		zap.String("harness_binary", req.HarnessBinary),
-	)
+	return s.runSeedsService.GetMergedCoverage(ctx, req)
+}
 
-	resp, err := s.runSeedsService.GetMergedCoverage(ctx, req)
-	if err != nil {
-		logging.Logger.Error("Failed to get merged coverage",
-			zap.String("harness_binary", req.HarnessBinary),
-			zap.Error(err),
-		)
-		return nil, err
-	}
+// GetRegionSource retrieves the source code for a specific region
+func (s *Server) GetRegionSource(ctx context.Context, req *runtime.GetRegionSourceRequest) (*runtime.GetRegionSourceResponse, error) {
+	// TODO: Merge to some service instead of using it statically
+	return service.GetRegionSource(ctx, req)
+}
 
-	logging.Logger.Info("Successfully retrieved merged coverage",
-		zap.String("harness_binary", req.HarnessBinary),
-	)
-	return resp, nil
+// GetCallGraph retrieves the call graph for the specified request
+func (s *Server) GetCallGraph(ctx context.Context, req *runtime.GetCallGraphRequest) (*runtime.GetCallGraphResponse, error) {
+	return s.runSeedsService.GetCallGraph(ctx, req)
 }
 
 // GetFunctions retrieves function information
 func (s *Server) GetFunctions(ctx context.Context, req *runtime.GetFunctionsRequest) (*runtime.GetFunctionsResponse, error) {
-	logging.Logger.Info("Getting functions",
-		zap.String("harness_binary", req.HarnessBinary),
-	)
-
-	resp, err := service.GetFunctions(ctx, req)
-	if err != nil {
-		logging.Logger.Error("Failed to get functions",
-			zap.String("harness_binary", req.HarnessBinary),
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	logging.Logger.Info("Successfully retrieved functions",
-		zap.String("harness_binary", req.HarnessBinary),
-	)
-	return resp, nil
+	// TODO: Merge to some service instead of using it statically
+	return service.GetFunctions(ctx, req)
 }
 
 // Serve starts the gRPC server with graceful shutdown support

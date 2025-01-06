@@ -122,6 +122,8 @@ func (s *RunSeedsService) GetMergedCoverage(ctx context.Context, req *runtime.Ge
 		return nil, status.Errorf(codes.Internal, "failed to parse getcov output: %v", err)
 	}
 
+	logging.Logger.Info("Successfully retrieved merged coverage")
+
 	return &runtime.RunSeedsResponse{
 		Coverage: coverage,
 		Report:   report,
