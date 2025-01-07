@@ -17,7 +17,7 @@ import grpc.aio
 
 DEFAULT_PORT = 9002
 DEFAULT_TIMEOUT = 30  # seconds
-DEFAULT_RETRY_INTERVAL = 1  # second
+DEFAULT_RETRY_INTERVAL = 3  # second
 
 
 def grpc_call(func):
@@ -37,6 +37,7 @@ def grpc_call(func):
                     rpc_error, grpc.Call) else rpc_error
                 if isinstance(error, grpc.Call) and error.code() == grpc.StatusCode.UNAVAILABLE:
                     time.sleep(DEFAULT_RETRY_INTERVAL)
+                    self.recreate_channel()
                     continue
                 # For other gRPC errors, raise immediately
                 if isinstance(error, grpc.Call):
@@ -66,11 +67,17 @@ class SeedD:
         self.shared_dir = shared_dir
         self.channel = grpc.insecure_channel(f"{ip_addr}:{DEFAULT_PORT}")
         self.stub = seedd_pb2_grpc.SeedDStub(self.channel)
+        self.health_stub = health_pb2_grpc.HealthStub(self.channel)
+
+    def recreate_channel(self):
+        self.channel.close()
+        self.channel = grpc.insecure_channel(f"{self.ip_addr}:{DEFAULT_PORT}")
+        self.stub = seedd_pb2_grpc.SeedDStub(self.channel)
+        self.health_stub = health_pb2_grpc.HealthStub(self.channel)
 
     def health_check(self):
         """Performs a health check on the gRPC server."""
-        health_stub = health_pb2_grpc.HealthStub(self.channel)
-        health_stub.Check(health_pb2.HealthCheckRequest())
+        self.health_stub.Check(health_pb2.HealthCheckRequest())
 
     def share_file(self, file_path: str):
         # Generate a UUID for the file to avoid name conflicts
@@ -90,7 +97,8 @@ class SeedD:
     @grpc_call
     def get_merged_coverage(self, harness_binary: str) -> seedd_pb2.RunSeedsResponse:
         """Gets the merged coverage for a harness."""
-        request = seedd_pb2.GetMergedCoverageRequest(harness_binary=harness_binary)
+        request = seedd_pb2.GetMergedCoverageRequest(
+            harness_binary=harness_binary)
         return self.stub.GetMergedCoverage(request, compression=grpc.Compression.Gzip)
 
     @grpc_call
