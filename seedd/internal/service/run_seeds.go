@@ -108,7 +108,7 @@ func (s *RunSeedsService) GetMergedCoverage(ctx context.Context, req *runtime.Ge
 	)
 	getcovCmd.Dir = artifactDir
 
-	output, err := getcovCmd.CombinedOutput()
+	output, err := getcovCmd.Output()
 	if err != nil {
 		logger.Error("Failed to run getcov",
 			zap.Error(err),
@@ -207,7 +207,7 @@ func (c *GetCovConfig) runGetCov() (string, error) {
 	getcovCmd := exec.Command(getCovBinary, args...)
 	getcovCmd.Dir = artifactDir
 
-	output, err := getcovCmd.CombinedOutput()
+	output, err := getcovCmd.Output()
 	if err != nil {
 		logger.Error("Failed to run getcov",
 			zap.Error(err),

@@ -29,7 +29,7 @@ func runGetCovAll(harnessBinary string) (string, error) {
 	getcovCmd := exec.Command("/getcov", "--all", "--", harnessBinary, seedFile)
 	getcovCmd.Dir = artifactDir
 
-	output, err := getcovCmd.CombinedOutput()
+	output, err := getcovCmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to run getcov: %v\nOutput: %s", err, string(output))
 	}
