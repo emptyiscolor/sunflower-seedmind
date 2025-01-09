@@ -28,7 +28,7 @@ def get_current_callgraph(seedd: SeedD, harness_binary: str) -> nx.DiGraph:
     logging.info(f"Call graph for {harness_binary} rebuilt successfully.")
     callgraph = _build_graph_from_json(resp.call_graph)
     tracker = Tracker()
-    tracker.add_callgraph(callgraph)
+    tracker.add_callgraph(resp.call_graph, callgraph)
     return callgraph
 
 
