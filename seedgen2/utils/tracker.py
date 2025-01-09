@@ -1,12 +1,13 @@
 from typing import Any
 from seedgen2.utils.singleton import singleton
 import os
-
+import networkx as nx
 
 @singleton
 class Tracker:
     def __init__(self):
         self.log_id = 0
+        self.figure_id = 0
 
     def set_log_dir(self, log_dir: str):
         self.log_dir = log_dir
@@ -32,3 +33,10 @@ class Tracker:
                 f.write("\n")
 
         self.log_id += 1
+    
+    def add_callgraph(self, json_text: str, G: nx.DiGraph):
+        edgelist_path = os.path.join(self.log_dir, f"callgraph_{self.figure_id}.edgelist")
+        nx.write_edgelist(G, edgelist_path, data=False)
+        with open(os.path.join(self.log_dir, f"callgraph_{self.figure_id}.json"), "w") as f:
+            f.write(json_text)
+        self.figure_id += 1

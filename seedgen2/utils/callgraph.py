@@ -7,6 +7,8 @@ from seedgen2.utils.grpc import SeedD
 
 from typing import List
 
+from seedgen2.utils.tracker import Tracker
+
 
 def _build_graph_from_json(json_str: str) -> nx.DiGraph:
     """
@@ -24,16 +26,10 @@ def get_current_callgraph(seedd: SeedD, harness_binary: str) -> nx.DiGraph:
     logging.info(f"Getting call graph for {harness_binary}")
     resp = seedd.get_call_graph(harness_binary)
     logging.info(f"Call graph for {harness_binary} rebuilt successfully.")
-    return _build_graph_from_json(resp.call_graph)
-
-
-def visualize_graph(G, output_path):
-    plt.figure(figsize=(12, 8))
-    pos = nx.spring_layout(G)
-    nx.draw(G, pos, with_labels=True, node_size=500, font_size=10,
-            font_weight='bold', edge_color='grey', arrows=True)
-    plt.title("Call Graph Visualization")
-    plt.savefig(output_path)
+    callgraph = _build_graph_from_json(resp.call_graph)
+    tracker = Tracker()
+    tracker.add_callgraph(callgraph)
+    return callgraph
 
 
 def get_ancestors(G: nx.DiGraph, target_function: str) -> List[str]:

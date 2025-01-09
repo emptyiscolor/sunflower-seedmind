@@ -129,6 +129,10 @@ def compile_project(root, project_name, project_config):
     subprocess.run(build_command, check=True,
                    cwd=os.path.dirname(dockerfile_path))
 
+    # Delete the src cache volume ({project_name}_src_cache)
+    # the volume may not exist, so we don't check the return code
+    subprocess.run(["docker", "volume", "rm", f"{project_name}_src_cache"], check=False)
+
     # Run the Docker container with the project image
     # Mount the `out` and `work` directories to the temporary directory
     mount_configs = {
@@ -181,6 +185,9 @@ def compile_project(root, project_name, project_config):
             "--privileged",
             "--shm-size=2g",
             "--entrypoint=compile",
+            "--mount",
+            # Cache /src folder for `autoconfig` projects
+            f"type=volume,source={project_name}_src_cache,target=/src",
         ]
         + mount_commands
         + environment_commands
@@ -251,6 +258,8 @@ def run_project(root, project_name, project_config) -> tuple[str, str]:
             "--privileged",
             "--shm-size=2g",
             "--entrypoint=/seedd",
+            "--mount",
+            f"type=volume,source={project_name}_src_cache,target=/src",
         ]
         + mount_commands
         + environment_commands
