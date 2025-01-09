@@ -78,18 +78,8 @@ def update_doc(
         harness_binary: str,
         previous_doc: str = "",
 ) -> str:
-    entrance_function = next(
-        (func for func in seed_feedback.partially_covered_functions if func.function_name ==
-         "LLVMFuzzerTestOneInput"),
-        None
-    )
-
-    if entrance_function is None:
-        logging.info("Entrance function is not found or is fully covered.")
-        return
-
     related_functions = get_related_functions(
-        seedd, functions, harness_binary, entrance_function.function_name)
+        seedd, functions, harness_binary, "LLVMFuzzerTestOneInput")
 
     model = SeedGen2GenerativeModel().model
 
