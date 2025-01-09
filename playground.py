@@ -72,6 +72,8 @@ def run_project(project_name):
             "--privileged",
             "--shm-size=2g",
             "--entrypoint=/bin/bash",
+            "--mount",
+            f"type=volume,source={project_name}_src_cache,target=/src",
         ]
         + mount_commands
         + environment_commands
