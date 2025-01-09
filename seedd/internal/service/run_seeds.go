@@ -103,7 +103,7 @@ func (s *RunSeedsService) GetMergedCoverage(ctx context.Context, req *runtime.Ge
 		"--profdata",
 		mergedProfdataPath,
 		"--",
-		req.HarnessBinary,
+		filepath.Join("/out", req.HarnessBinary),
 		"@@",
 	)
 	getcovCmd.Dir = artifactDir
@@ -200,7 +200,7 @@ func (c *GetCovConfig) runGetCov() (string, error) {
 	logger.Debug("Prepared seed directory", zap.String("tmp_dir", tmpDir))
 
 	// Construct getcov arguments.
-	args := []string{"-i", tmpDir, "--hybrid", "--", c.HarnessBinary, "@@"}
+	args := []string{"-i", tmpDir, "--hybrid", "--", filepath.Join("/out", c.HarnessBinary), "@@"}
 	logger.Info("Running getcov", zap.Strings("args", args))
 
 	// Run getcov command.
