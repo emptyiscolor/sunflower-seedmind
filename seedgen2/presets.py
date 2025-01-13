@@ -30,7 +30,7 @@ class BaseModel:
 @singleton
 class SeedGen2KnowledgeableModel(BaseModel):
     def __init__(self):
-        super().__init__("o1")
+        super().__init__("gpt-4o")
 
 
 @singleton

@@ -5,7 +5,7 @@ from typing import List, Optional
 from pathlib import Path
 
 from seedgen2.agents.alignment import align_script, update_doc
-from seedgen2.agents.filetype import generate_based_on_filetype, get_filetype
+from seedgen2.agents.filetype import generate_based_on_filetype, get_filetype, generate_reference_script
 from seedgen2.agents.glance import generate_first_script
 from seedgen2.graphs.sowbot import SowbotResult
 from seedgen2.utils.grpc import SeedD
@@ -77,7 +77,7 @@ class SeedGenAgent:
             file_name=Path(harness_func.file_path).name
         )
 
-    def _generate_filetype_seeds(self, script: str, structure_documentation: str, harness_info: HarnessInfo) -> SowbotResult:
+    def _generate_filetype_seeds(self, prev_result: SowbotResult, structure_documentation: str, harness_info: HarnessInfo) -> SowbotResult:
         filetype_result = get_filetype(
             harness_source_code=harness_info.source_code,
             harness_file_name=harness_info.file_name,
@@ -86,15 +86,30 @@ class SeedGenAgent:
 
         logging.info(f"Identified file type: {filetype_result}")
 
-        result = generate_based_on_filetype(
+        if filetype_result == "unknown":
+            logging.info(f"Unknown filetype, skipping script regeneration")
+            return prev_result
+        
+        # reference_script_path = f"/workspaces/sunflower/seedgen2/agents/generators/{filetype_result}.py"
+        # reference_script_exist = os.path.isfile(reference_script_path)
+        # reference_script = ""
+        # if reference_script_exist:
+        #     logging.info(f"Generator for {filetype_result} exists, using it for the prompt")
+        #     with open(reference_script_path, "r") as f:
+        #         reference_script = f.read()
+
+        reference_script = generate_reference_script(self.seedd, self.harness_binary, filetype_result)
+
+        return generate_based_on_filetype(
             self.seedd,
-            script,
+            prev_result.generator_script,
             structure_documentation,
             self.harness_binary,
             harness_info.source_code,
-            filetype_result
+            filetype_result,
+            True,
+            reference_script
         )
-        return result
 
     def run(self) -> None:
         """Run the seed generation process."""
@@ -108,24 +123,30 @@ class SeedGenAgent:
         # Seed generation pipeline
 
         # 1. Generate an initial script and an initial test case structure documentation
-        first_result = generate_first_script(
+        current_result = generate_first_script(
             self.seedd, harness_info.source_code, self.harness_binary)
-        current_script = first_result.generator_script
+        current_script = current_result.generator_script
         current_doc = update_doc(
-            self.seedd, first_result.seed_evaluation_result, functions, self.harness_binary)
+            self.seedd, current_result.seed_evaluation_result, functions, self.harness_binary)
+        
+        # Experiment with doing filetype first
+        current_result = self._generate_filetype_seeds(
+            current_result, current_doc, harness_info)
 
         # 2. Improve the script and documentation based on the current ones for X amount of rounds
         rounds = 2
         for i in range(rounds):
             current_result = align_script(
-                self.seedd, current_script, current_doc, self.harness_binary)
+                self.seedd, current_result.generator_script, current_doc, self.harness_binary)
             current_script = current_result.generator_script
+            if i == rounds - 1:
+                break
             current_doc = update_doc(
                 self.seedd, current_result.seed_evaluation_result, functions, self.harness_binary, current_doc)
 
         # 3. Enhance the script using common file type information, while retaining the structure in the documentation
-        filetype_result = self._generate_filetype_seeds(
-            current_script, current_doc, harness_info)
+        # current_result = self._generate_filetype_seeds(
+        #     current_result, current_doc, harness_info)
 
         # Finally, evaluate the coverage
         merged_coverage_report = get_merged_coverage(self.seedd, self.harness_binary)
