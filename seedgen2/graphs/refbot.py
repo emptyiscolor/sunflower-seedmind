@@ -19,8 +19,9 @@ class RefbotPrompts:
 ## Requirements for the Python Script:
 - Avoid importing unofficial third-party Python modules.
 - Avoid usage of external tools outside of Python.
-- Does not require any arguments, all generated files' contents should be randomly generated.
-- The generated output file should be printed to stdout.
+- Does not require any arguments, all generated contents should be randomly generated.
+- Only generate ONE piece of content (file or packet) in a single execution of the script.
+- The generated output content should be printed to stdout.
 
 ## Instructions and Steps:
 - As an integrated component of an automated system, you should perform the tasks without seeking human confirmation or help.

@@ -9,7 +9,7 @@ from seedgen2.utils.grpc import SeedD
 from seedgen2.presets import SeedGen2KnowledgeableModel, SeedGen2GenerativeModel
 
 PROMPT_determine_file_type = """
-Help me determine if there is a common file type that is being used as part of a test case for this fuzzing harness. In other words, based on the source code of the harness, you need to determine any potential common file type that is being used.
+Help me determine if there is a common file type (or protocol) that is being used as part of a test case for this fuzzing harness. In other words, based on the source code of the harness, you need to determine any potential common file type (or protocol) that is being used.
 
 The project under test's name is {project_name}.
 Here is the source code of the harness `{harness_file_name}`:
@@ -17,15 +17,15 @@ Here is the source code of the harness `{harness_file_name}`:
 {harness_source_code}
 ```
 
-You should return only the name of the file type in your response, and nothing else, e.g. `jpg`, `png`, `gif`, etc. If the file type is not determined (or not a common known file type), you should return `unknown`.
+You should return only the name of the file type (or protocol) in your response, and nothing else, e.g. `jpg`, `png`, `gif`, etc. or `http`, `tcp`, etc. If the file type (or protocol) is not determined (or not a commonly known one), you should return `unknown`.
 """
 
 PROMPT_reference = """
-Help me write me a python script that can generate random {file_type} files. Please make sure it that the generator script can generate a diverse set of {file_type} files and cover all different features that the file format offers.
+Help me write me a python script that can generate random files (or packets) for the {file_type} file type (or protocol). Please make sure it that the generator script can generate a diverse set of {file_type} files or packets and cover all different features that the file format or protocol offers.
 """
 
 PROMPT_generate = """
-I am working on a fuzzing project and have developed a Python script to generate test cases for a fuzzing harness. However, I noticed that the test harness might make use of a specific common file type called {file_type}. Currently, the test case generation script only generates a small limited amount of {file_type} file content, in a hard-coded manner. Therefore, I need your help to improve the script to encompass a more diverse and structural generation of this file type's content as part of the test case generation, in order to increase the overall test coverage.
+I am working on a fuzzing project and have developed a Python script to generate test cases for a fuzzing harness. However, I noticed that the test harness might make use of a specific common file type (or network packet) called {file_type}. Currently, the test case generation script only generates a small limited amount of {file_type} content, in a hard-coded manner. Therefore, I need your help to improve the script to encompass a more diverse and structural generation of this file type (or protocol packet)'s content as part of the test case generation, in order to increase the overall test coverage.
 
 Here is the current python script:
 {script}
@@ -36,7 +36,7 @@ After the improvement, with the addition of generating {file_type} content, the 
 """
 
 PROMPT_file_generator_script = """
-Furthermore, you can use the following script as a reference on how to generate random contents for the {file_type} file type, which could generate data that cover the intricacies of the structures and features of the file format:
+Furthermore, you can use the following script as a reference on how to generate random contents for the {file_type} file type or packet, which could generate data that cover the intricacies of the structures and features of the file format or protocol:
 {script}
 """
 
