@@ -6,6 +6,7 @@ from pathlib import Path
 
 from seedgen2.agents.alignment import align_script, update_doc
 from seedgen2.agents.filetype import generate_based_on_filetype, get_filetype, generate_reference_script
+from seedgen2.agents.coverage import generate_based_on_coverage
 from seedgen2.agents.glance import generate_first_script
 from seedgen2.graphs.sowbot import SowbotResult
 from seedgen2.utils.grpc import SeedD
@@ -132,21 +133,23 @@ class SeedGenAgent:
         # Experiment with doing filetype first
         current_result = self._generate_filetype_seeds(
             current_result, current_doc, harness_info)
-
-        # 2. Improve the script and documentation based on the current ones for X amount of rounds
-        rounds = 2
-        for i in range(rounds):
-            current_result = align_script(
+        
+        # Alignment once afterwards
+        current_doc = update_doc(
+            self.seedd, current_result.seed_evaluation_result, functions, self.harness_binary, current_doc)
+        
+        current_result = align_script(
                 self.seedd, current_result.generator_script, current_doc, self.harness_binary)
-            current_script = current_result.generator_script
-            if i == rounds - 1:
-                break
-            current_doc = update_doc(
-                self.seedd, current_result.seed_evaluation_result, functions, self.harness_binary, current_doc)
-
-        # 3. Enhance the script using common file type information, while retaining the structure in the documentation
-        # current_result = self._generate_filetype_seeds(
-        #     current_result, current_doc, harness_info)
+        
+        # Experimental coverage agent
+        current_result = generate_based_on_coverage(
+            self.seedd,
+            current_result,
+            functions,
+            current_doc,
+            self.harness_binary,
+            harness_info.source_code,
+            "LLVMFuzzerTestOneInput")
 
         # Finally, evaluate the coverage
         merged_coverage_report = get_merged_coverage(self.seedd, self.harness_binary)
