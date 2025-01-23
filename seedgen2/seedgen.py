@@ -149,7 +149,8 @@ class SeedGenAgent:
             current_doc,
             self.harness_binary,
             harness_info.source_code,
-            "LLVMFuzzerTestOneInput")
+            "LLVMFuzzerTestOneInput",
+            2)
 
         # Finally, evaluate the coverage
         merged_coverage_report = get_merged_coverage(self.seedd, self.harness_binary)
