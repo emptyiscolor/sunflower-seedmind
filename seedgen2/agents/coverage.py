@@ -1,4 +1,5 @@
 from seedgen2.graphs.sowbot import Sowbot, SowbotResult
+from seedgen2.graphs.plainbot import Plainbot
 from seedgen2.utils.grpc import SeedD
 from seedgen2.presets import SeedGen2GenerativeModel, SeedGen2KnowledgeableModel
 from seedgen2.graphs.sowbot import Sowbot
@@ -18,7 +19,7 @@ This is the harness source code:
 These are the current uncovered regions:
 {uncovered_code}
 
-Please answer with only "Yes" if you believe all codes aside from unimportant parts are covered. Otherwise answer with the code regions that you believe should be covered (please include the exact lines of codes in your response), and possibly some suggestions to improve the set of input seeds to cover them.
+Please answer with only "Yes" if you believe all codes aside from unimportant parts are covered. Otherwise answer with ONLY THE MOST IMPORTANT code regions that you believe should be covered (please include the exact lines of codes in your response), and possibly some suggestions to improve the set of input seeds to cover them.
 """
 
 PROMPT_MAXIMIZE_COVERAGE = """
@@ -30,13 +31,13 @@ This is the current script:
 This is the source code of the harness:
 {source}
 
-These are the current uncovered regions, and some suggestions that can potentially increase coverage:
+These are the current uncovered important code regions, and some suggestions that can potentially increase coverage:
 {uncovered_code}
 
 The overall structure of the generated test cases from this script should still follow the structure required by the fuzzing harness code, as described in the following documentation:
 {structure_documentation}
 
-Please help me improve the script to generate more diverse test cases which can achieve high coverage of the target project.
+Please help me improve the script following the suggestion above to achieve coverage in the currently uncovered important code regions.
 """
 
 
@@ -47,13 +48,14 @@ def generate_based_on_coverage(
         structure_documentation: str,
         harness_binary: str,
         harness_source_code: str,
-        root_function_name: str
+        root_function_name: str = "LLVMFuzzerTestOneInput",
+        depth_limit: int = 1
 ) -> SowbotResult:
     seed_feedback = prev_result.seed_evaluation_result
 
     G = get_current_callgraph(seedd, harness_binary)
 
-    directed_children = get_successors(G, root_function_name, depth_limit=1)
+    directed_children = get_successors(G, root_function_name, depth_limit=depth_limit)
     target_function_list = [root_function_name] + directed_children
 
     function_source_list = []
@@ -88,29 +90,30 @@ def generate_based_on_coverage(
             for ur in target_function.uncovered_regions
         ]
 
-        function_source_list += [target_function_source]
-        uncovered_list += ['\n\n'.join(target_function_uncovered)]
+        function_source_list += [f"{target_function_name}(args...){target_function_source}"]
+        uncovered_list += [f"- In function {target_function_name}:\n{'\n\n'.join(target_function_uncovered)}"]
 
     if function_source_list == []:
         logging.info(f"All related functions are fully covered")
         return prev_result
 
-    model = SeedGen2KnowledgeableModel().model
-    # model = SeedGen2GenerativeModel().model
+    # model = SeedGen2KnowledgeableModel().model
+    plain_model = SeedGen2GenerativeModel().model
 
     prompt = PROMPT_CHECK_COVERAGE.format(
         source='\n\n'.join(function_source_list),
-        uncovered_code=uncovered_list
+        uncovered_code='\n\n'.join(uncovered_list)
     )
 
-    cov_check_response = model.invoke(prompt).content
+    plainbot = Plainbot(model=plain_model)
+    cov_check_response = plainbot.run(prompt)
 
     if cov_check_response == "Yes":
         logging.info(f"All related functions are sufficiently covered according to LLM.")
         return prev_result
 
-    model = SeedGen2GenerativeModel().model
-    sowbot = Sowbot(seedd, harness_binary, include_example=False, model=model)
+    sow_model = SeedGen2GenerativeModel().model
+    sowbot = Sowbot(seedd, harness_binary, include_example=False, model=sow_model)
 
     prompt = PROMPT_MAXIMIZE_COVERAGE.format(
         script=prev_result.generator_script,
