@@ -1,6 +1,7 @@
-# oss-fuzz.py
-# Run SeedGen on an OSS-Fuzz project
-# Usage: python3 oss-fuzz.py [--root path/to/oss_fuzz] <project_name> <harness_binary>
+#!/usr/bin/env python
+# aixcc.py
+# Run SeedGen on an AIxCC generated oss-fuzz project and tooling
+# Usage: python3 aixcc.py <project_name> <path_to_fuzz_tooling> <path_to_src_dir> <harness_binary> [--all]
 
 import itertools
 import os
@@ -9,6 +10,8 @@ import argparse
 import yaml
 import subprocess
 import shutil
+import re
+import stat
 
 from seedgen2.seedgen import SeedGenAgent
 
@@ -19,27 +22,20 @@ def parse_args():
     parser.add_argument("project_name", type=str,
                         help="Name of the OSS-Fuzz project")
     parser.add_argument(
+        "fuzz_tooling",
+        type=str,
+        help="Path to the fuzz tooling directory (oss-fuzz)",
+    )
+    parser.add_argument(
+        "src_path",
+        type=str,
+        help="Path to the local project source directory",
+    )
+    parser.add_argument(
         "harness_binaries",
         type=str,
         nargs="*",
         help="Name of the fuzz target binaries. These binaries should be present in the `out` directory of the OSS-Fuzz project",
-    )
-    parser.add_argument(
-        "--root",
-        type=str,
-        default="oss-fuzz",
-        help="Path to the OSS-Fuzz root directory",
-    )
-    parser.add_argument(
-        "--src_path",
-        type=str,
-        default=None,
-        help="Path to a local source directory",
-    )
-    parser.add_argument(
-        "--rebuild",
-        action="store_true",
-        help="Rebuild fuzzers",
     )
     parser.add_argument(
         "--all",
@@ -130,78 +126,58 @@ def find_fuzzers(project_out_dir):
     return fuzzers
 
 
-# Compile the project, the artifacts will be stored in .tmp/cache/<project_name>/out
-def compile_project(root, project_name, project_config, src_path, rebuild):
+# Compile the project, the artifacts will be stored in <fuzz_tooling>/build/out/<project_name>/
+def compile_project(fuzz_tooling, project_name, project_config, src_path):
     dockerfile_path = os.path.join(
-        root, "projects", project_name, "Dockerfile")
+        fuzz_tooling, "projects", project_name, "Dockerfile")
     if not os.path.exists(dockerfile_path):
         raise FileNotFoundError("Dockerfile not found in project directory")
     if subprocess.run(["docker", "--version"]).returncode != 0:
         raise FileNotFoundError("Docker not found on the host machine")
+    
+    if src_path:
+        if not os.path.exists(os.path.abspath(src_path)):
+            raise FileNotFoundError(f"Local source path {os.path.abspath(src_path)} doesn't exist")
+        src_path = os.path.abspath(src_path)
 
     cache_dir = os.path.join(".tmp", "cache", project_name)
     os.makedirs(cache_dir, exist_ok=True)
 
-    # check if project_dir/out exists, if so, we don't need to compile the project again
-    if os.path.exists(os.path.join(cache_dir, "out")):
-        if rebuild:
-            shutil.rmtree(os.path.join(cache_dir, "out"))
-            shutil.rmtree(os.path.join(cache_dir, "work"))
-        else:
-            print(f"[*] Project '{project_name}' already compiled, skipping")
-            return find_fuzzers(os.path.join(cache_dir, "out"))
-
-    os.makedirs(os.path.join(cache_dir, "out"))
-    os.makedirs(os.path.join(cache_dir, "work"))
-
     cache_dir = os.path.abspath(cache_dir)
     print(f"[+] Project directory: {cache_dir}")
 
-    docker_image_name = f"oss-fuzz-build-{project_name}"
     build_command = [
-        "docker",
-        "build",
-        "-t",
-        docker_image_name,
-        ".",
+        f"{fuzz_tooling}/infra/helper.py",
+        "build_image",
+        "--pull",
+        project_name,
     ]
 
     # print the command for debugging
     print(f"[+] Running command: {' '.join(build_command)}")
 
-    subprocess.run(build_command, check=True,
-                   cwd=os.path.dirname(dockerfile_path))
+    subprocess.run(build_command, check=True)
 
-    # Delete the src cache volume ({project_name}_src_cache)
-    # the volume may not exist, so we don't check the return code
-    subprocess.run(["docker", "volume", "rm", f"{project_name}_src_cache"], check=False)
-
-    # Run the Docker container with the project image
-    # Mount the `out` and `work` directories to the temporary directory
-    mount_configs = {
-        "/out": f"{cache_dir}/out",
-        "/work": f"{cache_dir}/work",
-        "/clang-argus": get_prebuilt_binary_path("argus"),
-        "/clang-argus++": get_prebuilt_binary_path("argus"),
-        "/bandld": get_prebuilt_binary_path("bandld"),
-        "/libcallgraph_rt.a": get_prebuilt_binary_path("libcallgraph_rt.a"),
-        "/SeedMindCFPass.so": get_prebuilt_binary_path("SeedMindCFPass.so"),
+    # Copy tooling binaries to local project src directory
+    tool_dir = os.path.join(src_path, "42_B3YOND_TOOLS")
+    os.makedirs(tool_dir, exist_ok=True)
+    tools = {
+        os.path.join(tool_dir, "clang-argus"): get_prebuilt_binary_path("argus"),
+        os.path.join(tool_dir, "clang-argus++"): get_prebuilt_binary_path("argus"),
+        os.path.join(tool_dir, "bandld"): get_prebuilt_binary_path("bandld"),
+        os.path.join(tool_dir, "libcallgraph_rt.a"): get_prebuilt_binary_path("libcallgraph_rt.a"),
+        os.path.join(tool_dir, "SeedMindCFPass.so"): get_prebuilt_binary_path("SeedMindCFPass.so"),
     }
-    if src_path:
-        if not os.path.exists(os.path.abspath(src_path)):
-            raise FileNotFoundError(f"Local source path {os.path.abspath(src_path)} doesn't exist")
-        mount_configs[f"/src/{project_name}"] = os.path.abspath(src_path)
-    mount_commands = list(
-        itertools.chain.from_iterable(
-            ("-v", f"{src}:{dest}") for dest, src in mount_configs.items()
-        )
-    )
+    for dest, src in tools.items():
+        shutil.copyfile(src, dest)
+        st = os.stat(dest)
+        os.chmod(dest, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
     # Setup the environment variables
     environment_configs = {
         # Use Argus to compile the project
-        "CC": "/clang-argus",
-        "CXX": "/clang-argus++",
+        "CC": f"/src/{project_name}/42_B3YOND_TOOLS/clang-argus",
+        "CXX": f"/src/{project_name}/42_B3YOND_TOOLS/clang-argus++",
         # Argus settings (see https://github.com/whexy/argus for more details)
         "ADD_ADDITIONAL_PASSES": "SeedMindCFPass.so",
         "ADD_RUNTIME": "1",
@@ -225,40 +201,50 @@ def compile_project(root, project_name, project_config, src_path, rebuild):
         )
     )
 
-    docker_command = [
-            "docker",
-            "run",
-            "--privileged",
-            "--shm-size=2g",
-            "--entrypoint=compile",
-        ]
-    # only use src_cache if local src path is not being used
-    if not src_path:
-        docker_command += ["--mount", f"type=volume,source={project_name}_src_cache,target=/src"]
-
     run_command = (
-        docker_command
-        + mount_commands
+        [
+            f"{fuzz_tooling}/infra/helper.py",
+            "build_fuzzers",
+            "--clean",
+            project_name,
+            src_path,
+        ]
         + environment_commands
-        + [docker_image_name]
     )
 
     # print the command for debugging
     print(f"[+] Running command: {' '.join(run_command)}")
 
     process = subprocess.Popen(
-        run_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-    for line in process.stdout:
-        print(line, end='')
-    process.wait()
+        run_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, text=True)
+    stdout, stderr = process.communicate()
     if process.returncode != 0:
-        raise subprocess.CalledProcessError(process.returncode, run_command)
+        raise subprocess.CalledProcessError(
+            process.returncode, 
+            run_command, 
+            stdout + stderr
+        )
+
+    combined_output = stdout + stderr
+    image_name = None
+    # Look for "docker build -t "
+    match = re.search(r'docker build.*?-t\s+(\S+)', combined_output, re.DOTALL)
+    if match:
+        image_name = match.group(1)
+    else:
+        # If not found, look for "=> => naming to "
+        match = re.search(r"=> => naming to\s+(\S+)", combined_output)
+        if match:
+            image_name = match.group(1)
+
+    if not image_name:
+        raise ValueError("Can't identify Docker image name from build_fuzzers command")
     
-    return find_fuzzers(os.path.join(cache_dir, "out"))
+    return image_name, find_fuzzers(os.path.join(cache_dir, "out"))
 
 
 # Run the project. All artifacts will be stored in .tmp/<project_name>/<runtime_id>/
-def run_project(root, project_name, project_config, src_path) -> tuple[str, str]:
+def run_project(fuzz_tooling, image_name, project_name, src_path) -> tuple[str, str]:
     artifacts_dir = os.path.abspath(os.path.join(".tmp", project_name))
     os.makedirs(artifacts_dir, exist_ok=True)
 
@@ -267,16 +253,16 @@ def run_project(root, project_name, project_config, src_path) -> tuple[str, str]
     runtime_id = max(runtime_ids) + 1 if runtime_ids else 0
 
     project_dir = os.path.join(artifacts_dir, str(runtime_id))
+    os.makedirs(project_dir, exist_ok=True)
 
-    # copy files from .tmp/cache/<project_name> to .tmp/<project_name>/<runtime_id>
-    shutil.copytree(os.path.join(".tmp", "cache", project_name), project_dir)
+    # copy files from <fuzz_tooling>/build/out/<project_name> to .tmp/<project_name>/<runtime_id>
+    shutil.copytree(os.path.join(fuzz_tooling, "build/out", project_name), os.path.join(project_dir, "out"))
+    shutil.copytree(os.path.join(fuzz_tooling, "build/work", project_name), os.path.join(project_dir, "work"))
     if not os.path.exists(os.path.join(project_dir, "out")):
         raise FileNotFoundError(f"Project '{project_name}' not compiled")
 
     # create a "shared" folder in project_dir
     os.makedirs(os.path.join(project_dir, "shared"))
-
-    docker_image_name = f"oss-fuzz-build-{project_name}"
 
     # Run the Docker container with the project image
     # Mount the `out` and `shared` directories to the temporary directory
@@ -313,15 +299,12 @@ def run_project(root, project_name, project_config, src_path) -> tuple[str, str]
             "--shm-size=2g",
             "--entrypoint=/seedd",
         ]
-    # only use src_cache if local src path is not being used
-    if not src_path:
-        docker_command += ["--mount", f"type=volume,source={project_name}_src_cache,target=/src"]
 
     run_command = (
         docker_command
         + mount_commands
         + environment_commands
-        + [docker_image_name]
+        + [image_name]
     )
     result = subprocess.run(run_command, check=True, stdout=subprocess.PIPE)
     container_id = result.stdout.decode().strip()
@@ -343,25 +326,24 @@ def main():
     project_name = args.project_name
     harness_binaries = args.harness_binaries
     src_path = args.src_path
-    root = args.root
-    rebuild = args.rebuild
+    fuzz_tooling = args.fuzz_tooling
     all = args.all
 
     os.makedirs(".tmp", exist_ok=True)
     try:
-        project_yaml_path = validate_environment(root, project_name)
+        project_yaml_path = validate_environment(fuzz_tooling, project_name)
         project_config = load_project_config(project_yaml_path)
         print_project_info(project_name, project_config)
 
         # Compile the project
-        fuzzers = compile_project(root, project_name, project_config, src_path, rebuild)
+        image_name, fuzzers = compile_project(fuzz_tooling, project_name, project_config, src_path)
         if all:
             print(f"[*] The flag --all is enabled, running seedgen on all fuzzers: {fuzzers}")
             harness_binaries = fuzzers
 
         # Start the daemon
         project_dir, container_id = run_project(
-            root, project_name, project_config, src_path)
+            fuzz_tooling, image_name, project_name, src_path)
 
         # Start the agent
         for harness_binary in harness_binaries:

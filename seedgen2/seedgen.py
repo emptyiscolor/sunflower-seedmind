@@ -42,7 +42,7 @@ class SeedGenAgent:
             project_name: Name of the project
             harness_binary: Path to the harness binary
         """
-        self.seedd = SeedD(ip_addr, shared_dir=f"{result_dir}/shared")
+        self.seedd = SeedD(ip_addr, shared_dir=f"{result_dir}/../shared")
         self.result_dir = Path(result_dir)
         self.project_name = project_name
         self.harness_binary = harness_binary
