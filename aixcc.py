@@ -321,14 +321,7 @@ def get_prebuilt_binary_path(binary_name):
     return binary_path
 
 
-def main():
-    args = parse_args()
-    project_name = args.project_name
-    harness_binaries = args.harness_binaries
-    src_path = args.src_path
-    fuzz_tooling = args.fuzz_tooling
-    all = args.all
-
+def build_and_run_targets(project_name, harness_binaries, src_path, fuzz_tooling, all=False):
     os.makedirs(".tmp", exist_ok=True)
     try:
         project_yaml_path = validate_environment(fuzz_tooling, project_name)
@@ -365,6 +358,17 @@ def main():
         if "container_id" in locals():
             print(f"[-] Stopping container {container_id}")
             subprocess.run(["docker", "stop", container_id], check=True)
+
+
+def main():
+    args = parse_args()
+    project_name = args.project_name
+    harness_binaries = args.harness_binaries
+    src_path = args.src_path
+    fuzz_tooling = args.fuzz_tooling
+    all = args.all
+
+    build_and_run_targets(project_name, harness_binaries, src_path, fuzz_tooling, all)
 
 
 if __name__ == "__main__":

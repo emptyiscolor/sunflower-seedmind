@@ -1,3 +1,5 @@
+from aixcc import build_and_run_targets
+
 import os
 import requests
 import tarfile
@@ -127,23 +129,13 @@ def run_seedgen_for_task(task: TaskData):
     print(f"- Diff extracted into: {diff_dir}")
 
     # Invoke seedgen
-    seedgen_cmd = [
-        "./aixcc.py",
-        task.project_name,
-        os.path.join(task_dir, fuzz_tooling_dir),
-        os.path.join(task_dir, task.focus),
-        "--all",
-    ]
-
-    print(seedgen_cmd)
-
-    process = subprocess.Popen(
-        seedgen_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-    for line in process.stdout:
-        print(line, end='')
-    process.wait()
-    if process.returncode != 0:
-        raise subprocess.CalledProcessError(process.returncode, seedgen_cmd)
+    build_and_run_targets(
+        project_name=task.project_name,
+        harness_binaries=[],
+        src_path=os.path.join(task_dir, task.focus),
+        fuzz_tooling=os.path.join(task_dir, fuzz_tooling_dir),
+        all=True
+        )
     
     # Copy the result out to task_dir
     artifacts_dir = os.path.abspath(os.path.join(".tmp", task.project_name))
