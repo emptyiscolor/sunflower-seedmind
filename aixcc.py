@@ -240,7 +240,7 @@ def compile_project(fuzz_tooling, project_name, project_config, src_path):
     if not image_name:
         raise ValueError("Can't identify Docker image name from build_fuzzers command")
     
-    return image_name, find_fuzzers(os.path.join(cache_dir, "out"))
+    return image_name, find_fuzzers(os.path.join(fuzz_tooling, "build/out", project_name))
 
 
 # Run the project. All artifacts will be stored in .tmp/<project_name>/<runtime_id>/
