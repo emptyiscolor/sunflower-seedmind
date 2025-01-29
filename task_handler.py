@@ -74,9 +74,6 @@ def download_and_extract(url: str, dest_dir: str) -> str:
         # Extract all files
         tar.extractall(path=dest_dir)
 
-    # Optionally remove the tar file after extraction
-    os.remove(filename)
-
     # If there's exactly one top-level directory, return it
     if len(top_level_dirs) == 1:
         return top_level_dirs.pop()
@@ -115,12 +112,12 @@ def run_seedgen_for_task(task: TaskData):
     os.makedirs(task_dir, exist_ok=True)
 
     extracted_repos = []
-    for repo_url in task.repo:
-        folder_name = download_and_extract(repo_url, task_dir)
+    for repo_path in task.repo:
+        folder_name = extract_from_storage(repo_path, task_dir)
         extracted_repos.append(folder_name)
 
-    fuzz_tooling_dir = download_and_extract(task.fuzz_tooling, task_dir)
-    diff_dir = download_and_extract(task.diff, task_dir)
+    fuzz_tooling_dir = extract_from_storage(task.fuzz_tooling, task_dir)
+    diff_dir = extract_from_storage(task.diff, task_dir)
 
     print("[*] All archives have been downloaded and extracted.")
     print(f"- Task directory: {task_dir}")
@@ -166,14 +163,14 @@ class SeedRecord(Base):
     metrics     = Column(JSON, nullable=True)  # store any arbitrary JSON here
 
 
-def save_result_to_db(task: TaskData):
+def save_result_to_db(task: TaskData, storage_dir: str):
     DATABASE_URL = "sqlite:///seed.db"
     engine = create_engine(DATABASE_URL, echo=False)
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine)
     db_session = SessionLocal()
 
-    task_result_dir = os.path.abspath(os.path.join(".tmp", "tasks", str(task.task_id)), "result")
+    task_result_dir = os.path.abspath(os.path.join(".tmp", "tasks", str(task.task_id), "result"))
 
     root, dirs, files = next(os.walk(task_result_dir))
     
@@ -184,7 +181,11 @@ def save_result_to_db(task: TaskData):
         for subdir in dirs:
             # Compress and copy seeds to shared volume
             seed_dir = os.path.join(task_result_dir, subdir, "seeds")
-            seed_tar_gz_path = ""
+            seedgen_storage_dir = os.path.join(storage_dir, "seedgen", task.task_id)
+            os.makedirs(seedgen_storage_dir, exist_ok=True)
+            seed_tar_gz_path = os.path.join(seedgen_storage_dir, f"seedgen_{task.task_id}_{subdir}.tar.gz")
+            with tarfile.open(seed_tar_gz_path, "w:gz") as tar:
+                tar.add(seed_dir, arcname=".")
 
             # Create DB record
             new_seed_record = SeedRecord(
@@ -203,7 +204,6 @@ def save_result_to_db(task: TaskData):
         print("Error occurred:", e)
     finally:
         db_session.close()
-
 
 
 def listen_for_tasks(
@@ -247,7 +247,7 @@ def listen_for_tasks(
             run_seedgen_for_task(task)
 
             # Write result to database
-            # save_result_to_db(task)
+            save_result_to_db(task, "/crs")
 
             # Acknowledge the message so RabbitMQ knows it can be removed from the queue
             ch.basic_ack(delivery_tag=method.delivery_tag)
