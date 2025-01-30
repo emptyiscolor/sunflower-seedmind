@@ -1,10 +1,13 @@
 import argparse
 import os
+import pika.exceptions
 import requests
 import tarfile
 import shutil
 import subprocess
 import json
+import threading
+import functools
 from dataclasses import dataclass
 from typing import List
 
@@ -200,7 +203,7 @@ def save_result_to_db(task: TaskData, storage_dir: str, database_url: str):
             # Create DB record
             new_seed_record = SeedRecord(
                 task_id=str(task.task_id),  # Ensure string
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
                 path=seed_tar_gz_path,
                 harness_name=subdir,
                 fuzzer="seedgen",
@@ -240,7 +243,7 @@ def listen_for_tasks(
     # )
 
     # 3. Define a callback to process messages
-    def callback(ch, method, properties, body):
+    def callback(ch, method, properties, body, connection):
         try:
             data_dict = json.loads(body)
 
@@ -257,24 +260,40 @@ def listen_for_tasks(
 
             print(f"[*] Received task: {task}")
 
-            # Handle the task (extract, run seedgen)
-            run_seedgen_for_task(task)
-
-            # Write result to database
-            save_result_to_db(task, storage_dir, database_url)
-
-            # Acknowledge the message
-            ch.basic_ack(delivery_tag=method.delivery_tag)
+            # Start a new thread for processing
+            processing_thread = threading.Thread(target=process_task, args=(connection, ch, method, task))
+            processing_thread.start()
 
         except Exception as e:
-            # If there's a parsing error or missing field, handle it here
             print(f"[!] Failed to parse or process task: {e}")
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
+    def process_task(connection, ch, method, task):
+        try:
+            run_seedgen_for_task(task)
+            save_result_to_db(task, storage_dir, database_url)
+            cb = functools.partial(ack_nack_message, ch, method.delivery_tag)
+            connection.add_callback_threadsafe(cb)
+        except Exception as e:
+            print(f"[!] Error processing task {task.task_id}: {e}")
+            cb = functools.partial(ack_nack_message, ch, method.delivery_tag, True)
+            connection.add_callback_threadsafe(cb)
+
+    def ack_nack_message(channel, delivery_tag, nack=False):
+        if channel.is_open:
+            if nack:
+                channel.basic_ack(delivery_tag, requeue=False)
+            else:
+                channel.basic_ack(delivery_tag)
+        else:
+            raise pika.exceptions.StreamLostError
+
     # 4. Start consuming messages
+    channel.basic_qos(prefetch_count=1)
+    on_message_callback = functools.partial(callback, connection=connection)
     channel.basic_consume(
         queue=queue_name,
-        on_message_callback=callback
+        on_message_callback=on_message_callback
     )
 
     print("[*] Listening for tasks. Press CTRL+C to exit.")
