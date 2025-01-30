@@ -101,3 +101,8 @@ cython_debug/
 prebuilt/
 .tmp/
 .vscode/
+
+# AIxCC stuffs
+userspace-fuzzing-corpus/
+aixcc/
+.crs/

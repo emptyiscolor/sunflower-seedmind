@@ -42,7 +42,7 @@ class SeedGenAgent:
             project_name: Name of the project
             harness_binary: Path to the harness binary
         """
-        self.seedd = SeedD(ip_addr, shared_dir=f"{result_dir}/shared")
+        self.seedd = SeedD(ip_addr, shared_dir=f"{result_dir}/../shared")
         self.result_dir = Path(result_dir)
         self.project_name = project_name
         self.harness_binary = harness_binary
@@ -142,15 +142,16 @@ class SeedGenAgent:
                 self.seedd, current_result.generator_script, current_doc, self.harness_binary)
         
         # Experimental coverage agent
-        current_result = generate_based_on_coverage(
-            self.seedd,
-            current_result,
-            functions,
-            current_doc,
-            self.harness_binary,
-            harness_info.source_code,
-            "LLVMFuzzerTestOneInput",
-            2)
+        # current_result = generate_based_on_coverage(
+        #     self.seedd,
+        #     current_result,
+        #     functions,
+        #     current_doc,
+        #     self.harness_binary,
+        #     harness_info.source_code,
+        #     "LLVMFuzzerTestOneInput",
+        #     2)
+
 
         # Finally, evaluate the coverage
         merged_coverage_report = get_merged_coverage(self.seedd, self.harness_binary)
