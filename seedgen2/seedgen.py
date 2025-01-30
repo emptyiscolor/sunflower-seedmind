@@ -152,6 +152,7 @@ class SeedGenAgent:
         #     "LLVMFuzzerTestOneInput",
         #     2)
 
+
         # Finally, evaluate the coverage
         merged_coverage_report = get_merged_coverage(self.seedd, self.harness_binary)
         with open(os.path.join(self.result_dir, "merged_coverage.txt"), "w") as f:
