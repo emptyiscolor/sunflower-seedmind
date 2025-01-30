@@ -79,6 +79,7 @@ RUN apt-get update && apt-get -y install \
     python3-setuptools \
     python3-venv \
     python3-wheel \
+    python-is-python3 \
     rsync \
     software-properties-common \
     strace \
@@ -108,6 +109,8 @@ COPY --from=builder_getcov /app/getcov/target/release/getcov ./prebuilt/getcov
 COPY --from=builder_seedd /app/seedd/bin/seedd ./prebuilt/seedd
 
 RUN pip3 install -r requirements.txt --break-system-packages
+
+ENV PYTHONUNBUFFERED=1
 
 COPY ./entrypoint.sh ./entrypoint.sh
 
