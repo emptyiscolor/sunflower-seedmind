@@ -229,7 +229,7 @@ def listen_for_tasks(
 
     # 1. Connect to RabbitMQ
     connection = pika.BlockingConnection(
-        pika.ConnectionParameters(host=rabbitmq_host)
+        pika.URLParameters(rabbitmq_host)
     )
     channel = connection.channel()
 

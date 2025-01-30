@@ -91,9 +91,14 @@ RUN apt-get update && apt-get -y install \
     zip \
     && apt-get clean \
     && rm -rf /var/lib/{apt,dpkg,cache,log}
-    
+
 WORKDIR /app
-COPY . .
+COPY ./seedgen2 ./seedgen2
+COPY ./aixcc.py ./aixcc.py
+COPY ./task_handler.py ./task_handler.py
+COPY ./requirements.txt ./requirements.txt
+COPY ./.env ./.env
+
 RUN mkdir prebuilt
 COPY --from=builder_callgraph /app/runtime/target/release/libcallgraph_rt.a ./prebuilt/libcallgraph_rt.a
 COPY --from=builder_llvm_pass /app/llvm/SeedMindCFPass.so ./prebuilt/SeedMindCFPass.so
@@ -102,6 +107,6 @@ COPY --from=builder_bandld /app/bandld/target/release/bandld ./prebuilt/bandld
 COPY --from=builder_getcov /app/getcov/target/release/getcov ./prebuilt/getcov
 COPY --from=builder_seedd /app/seedd/bin/seedd ./prebuilt/seedd
 
-RUN pip3 install -r requirements.txt
+RUN pip3 install -r requirements.txt --break-system-packages
 
 ENTRYPOINT ["python3", "task_handler.py"]

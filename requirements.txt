@@ -13,3 +13,6 @@ networkx
 mypy-protobuf
 pytest
 jsonschema
+pika
+sqlalchemy
+psycopg2-binary
