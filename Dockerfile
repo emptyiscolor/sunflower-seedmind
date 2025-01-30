@@ -98,7 +98,6 @@ COPY ./seedgen2 ./seedgen2
 COPY ./aixcc.py ./aixcc.py
 COPY ./task_handler.py ./task_handler.py
 COPY ./requirements.txt ./requirements.txt
-COPY ./.env ./.env
 
 RUN mkdir prebuilt
 COPY --from=builder_callgraph /app/runtime/target/release/libcallgraph_rt.a ./prebuilt/libcallgraph_rt.a
