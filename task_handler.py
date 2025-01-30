@@ -1,5 +1,4 @@
-from aixcc import build_and_run_targets
-
+import argparse
 import os
 import requests
 import tarfile
@@ -23,6 +22,8 @@ from sqlalchemy.dialects.postgresql import JSON  # For PostgreSQL; for SQLite yo
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
+
+from aixcc import build_and_run_targets
 
 @dataclass
 class TaskData:
@@ -66,7 +67,6 @@ def download_and_extract(url: str, dest_dir: str) -> str:
     with tarfile.open(filename, 'r:gz') as tar:
         top_level_dirs = set()
         for member in tar.getmembers():
-            # e.g. if 'my_project/foo.c' => top_level is 'my_project'
             root = member.name.split('/')[0]
             if root:  # Make sure it's not empty
                 top_level_dirs.add(root)
@@ -83,14 +83,16 @@ def download_and_extract(url: str, dest_dir: str) -> str:
 
 
 def extract_from_storage(tar_path: str, dest_dir: str) -> str:
+    """
+    Extract a local .tar.gz file (tar_path) into dest_dir, 
+    then return the top-level directory if there's exactly one.
+    """
     if not tar_path:
         return ""
 
-    # Inspect the tarfile to figure out the top-level directory
     with tarfile.open(tar_path, 'r:gz') as tar:
         top_level_dirs = set()
         for member in tar.getmembers():
-            # e.g. if 'my_project/foo.c' => top_level is 'my_project'
             root = member.name.split('/')[0]
             if root:  # Make sure it's not empty
                 top_level_dirs.add(root)
@@ -102,76 +104,85 @@ def extract_from_storage(tar_path: str, dest_dir: str) -> str:
     if len(top_level_dirs) == 1:
         return top_level_dirs.pop()
 
-    # Otherwise, we didn't get exactly one top-level dir
     return None
 
 
 def run_seedgen_for_task(task: TaskData):
+    """
+    Given a TaskData, extract the repos, fuzzing_tooling, diff archives
+    into a .tmp/tasks/<task_id> folder and run build_and_run_targets.
+    """
     # Create a directory for this task
     task_dir = os.path.abspath(os.path.join(".tmp", "tasks", str(task.task_id)))
     os.makedirs(task_dir, exist_ok=True)
 
+    # Extract repos
     extracted_repos = []
     for repo_path in task.repo:
         folder_name = extract_from_storage(repo_path, task_dir)
         extracted_repos.append(folder_name)
 
+    # Extract fuzz_tooling
     fuzz_tooling_dir = extract_from_storage(task.fuzz_tooling, task_dir)
+
+    # Extract diff
     diff_dir = extract_from_storage(task.diff, task_dir)
 
-    print("[*] All archives have been downloaded and extracted.")
+    print("[*] All archives have been extracted.")
     print(f"- Task directory: {task_dir}")
     print(f"- Repo directories extracted: {extracted_repos}")
     print(f"- Fuzz tooling extracted into: {fuzz_tooling_dir}")
     print(f"- Diff extracted into: {diff_dir}")
 
-    # Invoke seedgen
+    # Invoke seedgen (build_and_run_targets from aixcc)
     build_and_run_targets(
         project_name=task.project_name,
         harness_binaries=[],
         src_path=os.path.join(task_dir, task.focus),
         fuzz_tooling=os.path.join(task_dir, fuzz_tooling_dir),
         all=True
-        )
+    )
     
     # Copy the result out to task_dir
     artifacts_dir = os.path.abspath(os.path.join(".tmp", task.project_name))
     runtime_id = max([int(d) for d in os.listdir(artifacts_dir) if d.isdigit()])
     project_dir = os.path.join(artifacts_dir, str(runtime_id))
     shutil.copytree(project_dir, os.path.join(task_dir, "result"))
-    
+
 
 Base = declarative_base()
 
 class SeedRecord(Base):
     __tablename__ = "Seed"
 
-    # This is an internal primary key (auto-increment), optional but recommended
+    # Internal primary key
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    # Your required fields:
+    # Required fields
     task_id     = Column(String, nullable=False)
     create_time = Column(DateTime, nullable=False, default=datetime.utcnow)
-    seed_path   = Column(String, nullable=False)  # e.g., path/to/seed_xxx.tar.gz
+    seed_path   = Column(String, nullable=False)  # path/to/seed_xxx.tar.gz
     harness     = Column(String, nullable=False)
-    fuzzer      = Column(String, nullable=False)  # wild / seedgen / prime / etc.
+    fuzzer      = Column(String, nullable=False)  # e.g., wild / seedgen / prime / etc.
     coverage    = Column(String, nullable=False)  # e.g., "69%"
 
-    # Optional metric JSON: 
-    # - For PostgreSQL you can use `dialects.postgresql.JSON`
-    # - For other DBs you might store as TEXT and parse it yourself
-    metrics     = Column(JSON, nullable=True)  # store any arbitrary JSON here
+    # Optional metric JSON
+    metrics     = Column(JSON, nullable=True)  # store arbitrary JSON
 
 
-def save_result_to_db(task: TaskData, storage_dir: str):
-    DATABASE_URL = "sqlite:///seed.db"
-    engine = create_engine(DATABASE_URL, echo=False)
+def save_result_to_db(task: TaskData, storage_dir: str, database_url: str):
+    """
+    Save the results of a TaskData to a DB pointed to by database_url,
+    storing seeds in storage_dir.
+    """
+    engine = create_engine(database_url, echo=False)
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine)
     db_session = SessionLocal()
 
     task_result_dir = os.path.abspath(os.path.join(".tmp", "tasks", str(task.task_id), "result"))
 
+    # Peek into the result directory
     root, dirs, files = next(os.walk(task_result_dir))
     
     # Filter out the unwanted subdirs
@@ -181,7 +192,7 @@ def save_result_to_db(task: TaskData, storage_dir: str):
         for subdir in dirs:
             # Compress and copy seeds to shared volume
             seed_dir = os.path.join(task_result_dir, subdir, "seeds")
-            seedgen_storage_dir = os.path.join(storage_dir, "seedgen", task.task_id)
+            seedgen_storage_dir = os.path.join(storage_dir, "seedgen", str(task.task_id))
             os.makedirs(seedgen_storage_dir, exist_ok=True)
             seed_tar_gz_path = os.path.join(seedgen_storage_dir, f"seedgen_{task.task_id}_{subdir}.tar.gz")
             with tarfile.open(seed_tar_gz_path, "w:gz") as tar:
@@ -189,7 +200,7 @@ def save_result_to_db(task: TaskData, storage_dir: str):
 
             # Create DB record
             new_seed_record = SeedRecord(
-                task_id=task.task_id,
+                task_id=str(task.task_id),  # Ensure string
                 create_time=datetime.utcnow(),
                 seed_path=seed_tar_gz_path,
                 harness=subdir,
@@ -207,12 +218,14 @@ def save_result_to_db(task: TaskData, storage_dir: str):
 
 
 def listen_for_tasks(
-    rabbitmq_host: str = "localhost",
-    queue_name: str = "task_queue"
+    rabbitmq_host: str,
+    queue_name: str,
+    database_url: str,
+    storage_dir: str
 ):
     """
     Connect to RabbitMQ, listen for tasks in JSON format on `queue_name`,
-    parse the message into a TaskData object, and print it.
+    parse the message into a TaskData object, and process it.
     """
 
     # 1. Connect to RabbitMQ
@@ -221,13 +234,12 @@ def listen_for_tasks(
     )
     channel = connection.channel()
 
-    # 2. Make sure the queue exists (this is idempotent)
+    # 2. Make sure the queue exists (idempotent)
     channel.queue_declare(queue=queue_name, durable=True)
 
-    # 3. Define a callback to process messages from the queue
+    # 3. Define a callback to process messages
     def callback(ch, method, properties, body):
         try:
-            # Parse JSON from the message body
             data_dict = json.loads(body)
 
             # Convert the JSON/dict to TaskData
@@ -243,22 +255,21 @@ def listen_for_tasks(
 
             print(f"[*] Received task: {task}")
 
-            # Handle the task and run seedgen
+            # Handle the task (extract, run seedgen)
             run_seedgen_for_task(task)
 
             # Write result to database
-            save_result_to_db(task, "/crs")
+            save_result_to_db(task, storage_dir, database_url)
 
-            # Acknowledge the message so RabbitMQ knows it can be removed from the queue
+            # Acknowledge the message
             ch.basic_ack(delivery_tag=method.delivery_tag)
 
         except Exception as e:
-            # If there's a parsing error or a missing field, handle it here
-            print(f"[!] Failed to parse task: {e}")
-            # You may want to NACK or requeue the message instead of acknowledging
+            # If there's a parsing error or missing field, handle it here
+            print(f"[!] Failed to parse or process task: {e}")
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
-    # 4. Start consuming messages, using our callback
+    # 4. Start consuming messages
     channel.basic_consume(
         queue=queue_name,
         on_message_callback=callback
@@ -274,7 +285,35 @@ def listen_for_tasks(
 
 
 if __name__ == "__main__":
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="RabbitMQ seedgen consumer")
+    parser.add_argument(
+        "--rabbitmq_host",
+        default="localhost",
+        help="RabbitMQ host (default: localhost)"
+    )
+    parser.add_argument(
+        "--queue_name",
+        default="task_queue",
+        help="RabbitMQ queue name (default: task_queue)"
+    )
+    parser.add_argument(
+        "--database_url",
+        default="sqlite:///seed.db",
+        help="Database URL (default: sqlite:///seed.db)"
+    )
+    parser.add_argument(
+        "--storage_dir",
+        default="/crs",
+        help="Directory path to store seeds and archives (default: /crs)"
+    )
+
+    args = parser.parse_args()
+
+    # Start listening for tasks with the given args
     listen_for_tasks(
-        rabbitmq_host="localhost",
-        queue_name="task_queue"
+        rabbitmq_host=args.rabbitmq_host,
+        queue_name=args.queue_name,
+        database_url=args.database_url,
+        storage_dir=args.storage_dir
     )
