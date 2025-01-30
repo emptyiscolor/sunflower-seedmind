@@ -282,7 +282,7 @@ def listen_for_tasks(
     def ack_nack_message(channel, delivery_tag, nack=False):
         if channel.is_open:
             if nack:
-                channel.basic_ack(delivery_tag, requeue=False)
+                channel.basic_nack(delivery_tag, requeue=False)
             else:
                 channel.basic_ack(delivery_tag)
         else:
