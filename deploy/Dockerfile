@@ -109,4 +109,6 @@ COPY --from=builder_seedd /app/seedd/bin/seedd ./prebuilt/seedd
 
 RUN pip3 install -r requirements.txt --break-system-packages
 
-ENTRYPOINT ["python3", "task_handler.py"]
+COPY ./entrypoint.sh ./entrypoint.sh
+
+ENTRYPOINT ["./entrypoint.sh"]
