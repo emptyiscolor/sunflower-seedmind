@@ -287,35 +287,26 @@ def listen_for_tasks(
 
 
 if __name__ == "__main__":
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(description="RabbitMQ seedgen consumer")
-    parser.add_argument(
-        "--rabbitmq_host",
-        default="localhost",
-        help="RabbitMQ host (default: localhost)"
+    # Retrieve configuration from environment variables with default values
+    rabbitmq_host = os.environ.get("RABBITMQ_HOST", "localhost")
+    queue_name = os.environ.get("QUEUE_NAME", "seedgen_queue")
+    database_url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://user:password@localhost/mydatabase"
     )
-    parser.add_argument(
-        "--queue_name",
-        default="seedgen_queue",
-        help="RabbitMQ queue name (default: seedgen_queue)"
-    )
-    parser.add_argument(
-        "--database_url",
-        default="postgresql://user:password@localhost/mydatabase",
-        help="Database URL (default: postgresql://user:password@localhost/mydatabase)"
-    )
-    parser.add_argument(
-        "--storage_dir",
-        default="/crs",
-        help="Directory path to store seeds and archives (default: /crs)"
-    )
+    storage_dir = os.environ.get("STORAGE_DIR", "/crs")
 
-    args = parser.parse_args()
+    # Optional: Print configurations for debugging purposes
+    print("Configuration:")
+    print(f"  RabbitMQ Host: {rabbitmq_host}")
+    print(f"  Queue Name: {queue_name}")
+    print(f"  Database URL: {database_url}")
+    print(f"  Storage Directory: {storage_dir}")
 
     # Start listening for tasks with the given args
     listen_for_tasks(
-        rabbitmq_host=args.rabbitmq_host,
-        queue_name=args.queue_name,
-        database_url=args.database_url,
-        storage_dir=args.storage_dir
+        rabbitmq_host=rabbitmq_host,
+        queue_name=queue_name,
+        database_url=database_url,
+        storage_dir=storage_dir
     )
