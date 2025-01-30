@@ -8,7 +8,7 @@ all: build copy
 
 # Build the Docker image
 build:
-	docker build -t $(IMAGE_NAME) .
+	docker build -t $(IMAGE_NAME) -f prebuilt.dockerfile .
 
 # Create the prebuilt directory and copy artifacts from the container
 copy:
