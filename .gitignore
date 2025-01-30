@@ -105,3 +105,4 @@ prebuilt/
 # AIxCC stuffs
 userspace-fuzzing-corpus/
 aixcc/
+.crs/

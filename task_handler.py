@@ -19,9 +19,8 @@ from sqlalchemy import (
     Text
 )
 from sqlalchemy.dialects.postgresql import JSON  # For PostgreSQL; for SQLite you can use TEXT instead
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from datetime import datetime
+from sqlalchemy.orm import sessionmaker, declarative_base
+from datetime import datetime, UTC
 
 from aixcc import build_and_run_targets
 
@@ -153,21 +152,21 @@ def run_seedgen_for_task(task: TaskData):
 Base = declarative_base()
 
 class SeedRecord(Base):
-    __tablename__ = "Seed"
+    __tablename__ = "seeds"
 
     # Internal primary key
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     # Required fields
-    task_id     = Column(String, nullable=False)
-    create_time = Column(DateTime, nullable=False, default=datetime.utcnow)
-    seed_path   = Column(String, nullable=False)  # path/to/seed_xxx.tar.gz
-    harness     = Column(String, nullable=False)
-    fuzzer      = Column(String, nullable=False)  # e.g., wild / seedgen / prime / etc.
-    coverage    = Column(String, nullable=False)  # e.g., "69%"
+    task_id      = Column(String, nullable=False)
+    created_at   = Column(DateTime, nullable=False, default=datetime.now(UTC))
+    path         = Column(String, nullable=False)  # path/to/seed_xxx.tar.gz
+    harness_name = Column(String, nullable=False)
+    fuzzer       = Column(String, nullable=False)  # e.g., wild / seedgen / prime / etc.
+    coverage     = Column(String, nullable=False)  # e.g., "69%"
 
     # Optional metric JSON
-    metrics     = Column(JSON, nullable=True)  # store arbitrary JSON
+    metric       = Column(JSON, nullable=True)  # store arbitrary JSON
 
 
 def save_result_to_db(task: TaskData, storage_dir: str, database_url: str):
@@ -201,12 +200,12 @@ def save_result_to_db(task: TaskData, storage_dir: str, database_url: str):
             # Create DB record
             new_seed_record = SeedRecord(
                 task_id=str(task.task_id),  # Ensure string
-                create_time=datetime.utcnow(),
-                seed_path=seed_tar_gz_path,
-                harness=subdir,
-                fuzzer="?",
-                coverage="69%",
-                metrics=None
+                created_at=datetime.utcnow(),
+                path=seed_tar_gz_path,
+                harness_name=subdir,
+                fuzzer="seedgen",
+                coverage=0.6969,
+                metric=None
             )
             db_session.add(new_seed_record)
             db_session.commit()
@@ -235,7 +234,10 @@ def listen_for_tasks(
     channel = connection.channel()
 
     # 2. Make sure the queue exists (idempotent)
-    channel.queue_declare(queue=queue_name, durable=True)
+    # channel.queue_declare(
+    #     queue=queue_name,
+    #     durable=True
+    # )
 
     # 3. Define a callback to process messages
     def callback(ch, method, properties, body):
@@ -294,13 +296,13 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--queue_name",
-        default="task_queue",
-        help="RabbitMQ queue name (default: task_queue)"
+        default="seedgen_queue",
+        help="RabbitMQ queue name (default: seedgen_queue)"
     )
     parser.add_argument(
         "--database_url",
-        default="sqlite:///seed.db",
-        help="Database URL (default: sqlite:///seed.db)"
+        default="postgresql://user:password@localhost/mydatabase",
+        help="Database URL (default: postgresql://user:password@localhost/mydatabase)"
     )
     parser.add_argument(
         "--storage_dir",
