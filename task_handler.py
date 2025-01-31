@@ -1,10 +1,9 @@
-import argparse
 import os
+import traceback
 import pika.exceptions
 import requests
 import tarfile
 import shutil
-import subprocess
 import json
 import threading
 import functools
@@ -21,11 +20,13 @@ from sqlalchemy import (
     DateTime,
     Text
 )
-from sqlalchemy.dialects.postgresql import JSON  # For PostgreSQL; for SQLite you can use TEXT instead
+# For PostgreSQL; for SQLite you can use TEXT instead
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime, UTC
 
 from aixcc import build_and_run_targets
+
 
 @dataclass
 class TaskData:
@@ -115,7 +116,8 @@ def run_seedgen_for_task(task: TaskData):
     into a .tmp/tasks/<task_id> folder and run build_and_run_targets.
     """
     # Create a directory for this task
-    task_dir = os.path.abspath(os.path.join(".tmp", "tasks", str(task.task_id)))
+    task_dir = os.path.abspath(os.path.join(
+        ".tmp", "tasks", str(task.task_id)))
     os.makedirs(task_dir, exist_ok=True)
 
     # Extract repos
@@ -144,15 +146,17 @@ def run_seedgen_for_task(task: TaskData):
         fuzz_tooling=os.path.join(task_dir, fuzz_tooling_dir),
         all=True
     )
-    
+
     # Copy the result out to task_dir
     artifacts_dir = os.path.abspath(os.path.join(".tmp", task.project_name))
-    runtime_id = max([int(d) for d in os.listdir(artifacts_dir) if d.isdigit()])
+    runtime_id = max([int(d)
+                     for d in os.listdir(artifacts_dir) if d.isdigit()])
     project_dir = os.path.join(artifacts_dir, str(runtime_id))
     shutil.copytree(project_dir, os.path.join(task_dir, "result"))
 
 
 Base = declarative_base()
+
 
 class SeedRecord(Base):
     __tablename__ = "seeds"
@@ -161,15 +165,16 @@ class SeedRecord(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     # Required fields
-    task_id      = Column(String, nullable=False)
-    created_at   = Column(DateTime, nullable=False, default=datetime.now(UTC))
-    path         = Column(String, nullable=False)  # path/to/seed_xxx.tar.gz
+    task_id = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.now(UTC))
+    path = Column(String, nullable=False)  # path/to/seed_xxx.tar.gz
     harness_name = Column(String, nullable=False)
-    fuzzer       = Column(String, nullable=False)  # e.g., wild / seedgen / prime / etc.
-    coverage     = Column(String, nullable=False)  # e.g., "69%"
+    # e.g., wild / seedgen / prime / etc.
+    fuzzer = Column(String, nullable=False)
+    coverage = Column(String, nullable=False)  # e.g., "69%"
 
     # Optional metric JSON
-    metric       = Column(JSON, nullable=True)  # store arbitrary JSON
+    metric = Column(JSON, nullable=True)  # store arbitrary JSON
 
 
 def save_result_to_db(task: TaskData, storage_dir: str, database_url: str):
@@ -182,21 +187,24 @@ def save_result_to_db(task: TaskData, storage_dir: str, database_url: str):
     SessionLocal = sessionmaker(bind=engine)
     db_session = SessionLocal()
 
-    task_result_dir = os.path.abspath(os.path.join(".tmp", "tasks", str(task.task_id), "result"))
+    task_result_dir = os.path.abspath(os.path.join(
+        ".tmp", "tasks", str(task.task_id), "result"))
 
     # Peek into the result directory
     root, dirs, files = next(os.walk(task_result_dir))
-    
+
     # Filter out the unwanted subdirs
     dirs = [d for d in dirs if d not in ("out", "work", "shared")]
-    
+
     try:
         for subdir in dirs:
             # Compress and copy seeds to shared volume
             seed_dir = os.path.join(task_result_dir, subdir, "seeds")
-            seedgen_storage_dir = os.path.join(storage_dir, "seedgen", str(task.task_id))
+            seedgen_storage_dir = os.path.join(
+                storage_dir, "seedgen", str(task.task_id))
             os.makedirs(seedgen_storage_dir, exist_ok=True)
-            seed_tar_gz_path = os.path.join(seedgen_storage_dir, f"seedgen_{task.task_id}_{subdir}.tar.gz")
+            seed_tar_gz_path = os.path.join(seedgen_storage_dir, f"seedgen_{
+                                            task.task_id}_{subdir}.tar.gz")
             with tarfile.open(seed_tar_gz_path, "w:gz") as tar:
                 tar.add(seed_dir, arcname=".")
 
@@ -261,7 +269,8 @@ def listen_for_tasks(
             print(f"[*] Received task: {task}")
 
             # Start a new thread for processing
-            processing_thread = threading.Thread(target=process_task, args=(connection, ch, method, task))
+            processing_thread = threading.Thread(
+                target=process_task, args=(connection, ch, method, task))
             processing_thread.start()
 
         except Exception as e:
@@ -276,7 +285,9 @@ def listen_for_tasks(
             connection.add_callback_threadsafe(cb)
         except Exception as e:
             print(f"[!] Error processing task {task.task_id}: {e}")
-            cb = functools.partial(ack_nack_message, ch, method.delivery_tag, True)
+            print(traceback.format_exc())
+            cb = functools.partial(ack_nack_message, ch,
+                                   method.delivery_tag, True)
             connection.add_callback_threadsafe(cb)
 
     def ack_nack_message(channel, delivery_tag, nack=False):
