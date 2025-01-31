@@ -200,8 +200,22 @@ func (c *GetCovConfig) runGetCov() (string, error) {
 	logger.Debug("Prepared seed directory", zap.String("tmp_dir", tmpDir))
 
 	// Construct getcov arguments.
-	args := []string{"-i", tmpDir, "--hybrid", "--", filepath.Join("/out", c.HarnessBinary), "@@"}
-	logger.Info("Running getcov", zap.Strings("args", args))
+	// args := []string{"-i", tmpDir, "--hybrid", "--", filepath.Join("/out", c.HarnessBinary), "@@"}
+	// logger.Info("Running getcov", zap.Strings("args", args))
+
+	args := []string{"--hybrid", "--", filepath.Join("/out", c.HarnessBinary)}
+
+	files, err := os.ReadDir(tmpDir)
+	if err != nil {
+		logger.Fatal("Failed to read tmpDir", zap.Error(err))
+	}
+
+	for _, file := range files {
+		if !file.IsDir() {
+			filePath := filepath.Join(tmpDir, file.Name())
+			args = append(args, filePath)
+		}
+	}
 
 	// Run getcov command.
 	getcovCmd := exec.Command(getCovBinary, args...)
