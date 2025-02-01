@@ -312,8 +312,6 @@ def run_project(root, project_name, project_config, src_path) -> tuple[str, str]
             "--privileged",
             "--shm-size=2g",
             "--entrypoint=/seedd",
-            "--mount",
-            f"type=volume,source={project_name}_src_cache,target=/src",
         ]
     # only use src_cache if local src path is not being used
     if not src_path:
