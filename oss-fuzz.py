@@ -231,9 +231,6 @@ def compile_project(root, project_name, project_config, src_path, rebuild):
             "--privileged",
             "--shm-size=2g",
             "--entrypoint=compile",
-            "--mount",
-            # Cache /src folder for `autoconfig` projects
-            f"type=volume,source={project_name}_src_cache,target=/src",
         ]
     # only use src_cache if local src path is not being used
     if not src_path:
