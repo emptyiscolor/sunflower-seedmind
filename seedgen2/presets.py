@@ -13,7 +13,8 @@ load_dotenv()
 
 
 class BaseModel:
-    def __init__(self, model_name):
+    def __init__(self, env_var_name, default_model):
+        model_name = os.getenv(env_var_name, default_model)
         self.model = ChatOpenAI(
             model=model_name,
             base_url=os.getenv("LITELLM_BASE_URL"),
@@ -30,22 +31,22 @@ class BaseModel:
 @singleton
 class SeedGen2KnowledgeableModel(BaseModel):
     def __init__(self):
-        super().__init__("gpt-4o")
+        super().__init__("SEEDGEN_KNOWLEDGEABLE_MODEL", "gpt-4o")
 
 
 @singleton
 class SeedGen2GenerativeModel(BaseModel):
     def __init__(self):
-        super().__init__("o1")
+        super().__init__("SEEDGEN_GENERATIVE_MODEL", "o1")
 
 
 @singleton
 class SeedGen2RefinerModel(BaseModel):
     def __init__(self):
-        super().__init__("qwen")
+        super().__init__("SEEDGEN_REFINER_MODEL", "o1")
 
 
 @singleton
 class SeedGen2InferModel(BaseModel):
     def __init__(self):
-        super().__init__("o1")
+        super().__init__("SEEDGEN_INFER_MODEL", "o1")
