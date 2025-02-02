@@ -9,6 +9,7 @@ from typing import List
 from seedgen2.utils.coverage import CoverageInfo, PartiallyCoveredFunction, parse_coverage, parse_partially_covered_functions
 from seedgen2.utils.grpc import SeedD
 import logging
+import os
 
 
 @dataclass
@@ -50,9 +51,11 @@ def __get_seed_coverage(seedd: SeedD, harness_binary: str, seed_paths: list[str]
                  coverage_info}")
     partially_covered_functions = parse_partially_covered_functions(
         run_seeds_result.coverage)
+    with open(os.path.join(seedd.shared_dir, run_seeds_result.report), "r") as f:
+        report = f.read()
 
     return SeedFeedback(
         coverage_info=coverage_info,
         partially_covered_functions=partially_covered_functions,
-        report=run_seeds_result.report,
+        report=report,
     )
