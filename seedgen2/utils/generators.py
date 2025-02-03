@@ -26,7 +26,7 @@ class GeneratorRunResult:
 
 @singleton
 class SeedGeneratorStore:
-    def __init__(self, num_seeds: int = 10):
+    def __init__(self, num_seeds: int = 100):
         self.result_dir = ""
         self.generators: list[str] = []
         self.num_seeds = num_seeds
