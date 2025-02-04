@@ -69,6 +69,16 @@ func (s *RunSeedsService) RunSeeds(ctx context.Context, req *runtime.RunSeedsReq
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	// Write report to a file under /shared
+	reportFilePath := filepath.Join("/shared", "getcov_report.txt")
+	if err := os.WriteFile(reportFilePath, []byte(report), 0644); err != nil {
+		logger.Error("Failed to write report to file",
+			zap.String("file_path", reportFilePath),
+			zap.Error(err),
+		)
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to write report to file: %v", err))
+	}
+
 	// Merge the newly generated .profdata into the overall merged profile.
 	if err := s.mergeProfdata(req.HarnessBinary, profdataPath); err != nil {
 		logger.Error("Failed to merge profdata",
@@ -81,7 +91,7 @@ func (s *RunSeedsService) RunSeeds(ctx context.Context, req *runtime.RunSeedsReq
 	logger.Info("Successfully completed seed execution")
 	return &runtime.RunSeedsResponse{
 		Coverage: coverage,
-		Report:   report,
+		Report:   "getcov_report.txt",
 	}, nil
 }
 
@@ -122,11 +132,21 @@ func (s *RunSeedsService) GetMergedCoverage(ctx context.Context, req *runtime.Ge
 		return nil, status.Errorf(codes.Internal, "failed to parse getcov output: %v", err)
 	}
 
+	// Write report to a file under /shared
+	reportFilePath := filepath.Join("/shared", "getcov_merged_report.txt")
+	if err := os.WriteFile(reportFilePath, []byte(report), 0644); err != nil {
+		logger.Error("Failed to write report to file",
+			zap.String("file_path", reportFilePath),
+			zap.Error(err),
+		)
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to write report to file: %v", err))
+	}
+
 	logging.Logger.Info("Successfully retrieved merged coverage")
 
 	return &runtime.RunSeedsResponse{
 		Coverage: coverage,
-		Report:   report,
+		Report:   "getcov_merged_report.txt",
 	}, nil
 }
 

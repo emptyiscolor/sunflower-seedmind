@@ -46,6 +46,7 @@ class SeedGen2RefinerModel(BaseModel):
         super().__init__("SEEDGEN_REFINER_MODEL", "o1")
 
 
+
 @singleton
 class SeedGen2InferModel(BaseModel):
     def __init__(self):

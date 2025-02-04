@@ -73,14 +73,15 @@ if __name__ == "__main__":
     SCRIPT_NOT_FOUND = """Unable to find the generated script. You should wrap your script in triple backticks like this: ```python\n...\n```"""
 
     @staticmethod
-    def get_full_prompt(prompt: str, include_requirements: bool = True, include_example: bool = True) -> str:
+    def get_full_prompt(prompt: str, context: str, include_requirements: bool = True, include_example: bool = True) -> str:
         """Builds the full prompt with optional requirements and example."""
         components = [prompt]
         if include_requirements:
             components.append(SowbotPrompts.REQUIREMENTS_PROMPT)
         if include_example:
             components.append(SowbotPrompts.ONE_SHOT_EXAMPLE)
-        return "\n\n".join(components)
+        components.append(context)
+        return "\n".join(components)
 
 
 @dataclass
@@ -221,7 +222,7 @@ class Sowbot:
         else:
             self.model = model
 
-    def run(self, prompt: str) -> SowbotResult:
+    def run(self, prompt: str, context: str) -> SowbotResult:
         """
         Runs the seed generation and evaluation process.
 
@@ -234,6 +235,7 @@ class Sowbot:
         graph = build_generate_graph()
         full_prompt = SowbotPrompts.get_full_prompt(
             prompt,
+            context,
             include_requirements=self.enforce_requirements,
             include_example=self.include_example
         )

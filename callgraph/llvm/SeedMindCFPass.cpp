@@ -10,6 +10,7 @@
 #include <llvm/IR/PassManager.h>
 #include <llvm/Passes/OptimizationLevel.h>
 #include <llvm/Support/Compiler.h>
+#include "llvm/IR/DebugInfoMetadata.h"
 
 using namespace llvm;
 
@@ -27,6 +28,18 @@ public:
             FunctionType::get(Type::getVoidTy(M.getContext()), false));
 
         for (auto& F : M.functions()) {
+            // Use Debug Info Metadata to filter out functions that come from libraries under /usr
+            if (llvm::DISubprogram *SP = F.getSubprogram()) {
+                std::string Filename = SP->getFilename().str();
+                std::string Directory = SP->getDirectory().str();
+
+                std::string FullPath = Directory.empty() ? Filename : Directory + "/" + Filename;
+
+                if (FullPath.compare(0, 4, "/usr") != std::string::npos) {
+                    continue;
+                }
+            }
+
             if (F.isDeclaration() || F.empty())
                 continue;
             IRBuilder<> Builder(&*F.getEntryBlock().getFirstInsertionPt());

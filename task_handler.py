@@ -4,6 +4,7 @@ import pika.exceptions
 import requests
 import tarfile
 import shutil
+import subprocess
 import json
 import threading
 import functools
@@ -138,6 +139,19 @@ def run_seedgen_for_task(task: TaskData):
     print(f"- Fuzz tooling extracted into: {fuzz_tooling_dir}")
     print(f"- Diff extracted into: {diff_dir}")
 
+    # Apply the diff files
+    if diff_dir:
+        project_path = os.path.join(task_dir, task.focus)
+        diff_files = [f for f in os.listdir(os.path.join(task_dir, diff_dir)) if f.endswith('.patch') or f.endswith('.diff')]
+        for diff_file in diff_files:
+            diff_file_path = os.path.join(task_dir, diff_dir, diff_file)
+            if os.path.exists(diff_file_path):
+                apply_diff_command = ["git", "apply", diff_file_path]
+                subprocess.run(apply_diff_command, check=True, cwd=project_path)
+                print(f"[+] Applied diff from {diff_file_path} to {project_path}")
+            else:
+                print(f"[!] Diff file {diff_file_path} does not exist")
+
     # Invoke seedgen (build_and_run_targets from aixcc)
     build_and_run_targets(
         project_name=task.project_name,
@@ -255,6 +269,8 @@ def listen_for_tasks(
         try:
             data_dict = json.loads(body)
 
+            diff = data_dict.get("diff", None)
+
             # Convert the JSON/dict to TaskData
             task = TaskData(
                 task_id=data_dict["task_id"],
@@ -263,7 +279,7 @@ def listen_for_tasks(
                 focus=data_dict["focus"],
                 repo=data_dict["repo"],
                 fuzz_tooling=data_dict["fuzzing_tooling"],
-                diff=data_dict["diff"]
+                diff=diff
             )
 
             print(f"[*] Received task: {task}")

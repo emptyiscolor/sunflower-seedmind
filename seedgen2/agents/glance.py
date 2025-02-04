@@ -9,8 +9,11 @@ from seedgen2.graphs.sowbot import Sowbot
 from seedgen2.utils.grpc import SeedD
 
 PROMPT_GENERATE_FIRST_SCRIPT = """
-You are a professional in the field of software security testing. Given the source code of a fuzzing harness, analyze the harness and generate a Python script that can be used to generate valid testcases for the given harness. Try your best to ensure the generated testcases cover as much harness code as possible. The generated test cases should be diverse and effective for security testing purposes. Consider various input types, edge cases, and potential vulnerabilities relevant to the system being tested. Ensure your script can produce a wide range of test scenarios to thoroughly exercise the target application or protocol.
+Given the source code of a fuzzing harness, analyze the harness and generate a Python script that can be used to generate valid testcases for the given harness. Try your best to ensure the generated testcases cover as much harness code as possible. The generated test cases should be diverse and effective for security testing purposes. Consider various input types, edge cases, and potential vulnerabilities relevant to the system being tested. Ensure your script can produce a wide range of test scenarios to thoroughly exercise the target application or protocol.
+"""
 
+CONTEXT_GENERATE_FIRST_SCRIPT = """
+## For context:
 Here is the source code of the harness:
 {harness_source_code}
 """
@@ -22,10 +25,11 @@ def generate_first_script(
 ):
     # Use generative model to generate the initial script
     model = SeedGen2GenerativeModel().model
-    prompt = PROMPT_GENERATE_FIRST_SCRIPT.format(
+    prompt = PROMPT_GENERATE_FIRST_SCRIPT
+    context = CONTEXT_GENERATE_FIRST_SCRIPT.format(
         harness_source_code=harness_source_code
     )
 
     sowbot = Sowbot(seedd, harness_binary, model=model)
 
-    return sowbot.run(prompt)
+    return sowbot.run(prompt, context)
