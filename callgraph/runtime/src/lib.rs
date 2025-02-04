@@ -1,4 +1,3 @@
-use backtrace::Backtrace;
 use dashmap::{DashMap, DashSet};
 use lazy_static::lazy_static;
 use std::cell::Cell;
@@ -43,7 +42,7 @@ impl Drop for RecursionGuard {
 }
 
 #[no_mangle]
-pub extern "C" fn __seedmind_func_enter() {
+pub extern "C" fn __seedmind_record_func_call(caller: *mut c_void, callee: *mut c_void) {
     if !*ENABLED {
         return;
     }
@@ -63,14 +62,8 @@ pub extern "C" fn __seedmind_func_enter() {
         }
     });
 
-    let current_bt = Backtrace::new_unresolved();
-    let frames = current_bt.frames();
-
-    let callee = frames.get(1).and_then(|frame| symbolize_pc(frame.ip()));
-    let caller = frames
-        .iter()
-        .skip(2)
-        .find_map(|frame| symbolize_pc(frame.ip()));
+    let callee = symbolize_pc(callee);
+    let caller = symbolize_pc(caller);
 
     let pair = (callee.clone(), caller.clone());
     if !SEEN_PAIRS.insert(pair) {
@@ -103,7 +96,9 @@ fn symbolize_pc(pc: *mut c_void) -> Option<String> {
 #[inline]
 fn __symbolize_pc(pc: *mut c_void) -> Option<String> {
     let mut result = None;
-    backtrace::resolve(pc, |symbol| {
+
+    // backtrace::resolve((pc as usize - 8) as *mut c_void, |symbol| {
+    backtrace::resolve(unsafe { (pc as *mut c_void).add(1) }, |symbol| {
         if let Some(symbol_name) = symbol.name() {
             result = Some(symbol_name.to_string());
         }
