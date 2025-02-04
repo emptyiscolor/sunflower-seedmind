@@ -141,14 +141,14 @@ def run_seedgen_for_task(task: TaskData):
 
     # Apply the diff files
     if diff_dir:
-        project_path = os.path.join(task_dir, task.focus)
         diff_files = [f for f in os.listdir(os.path.join(task_dir, diff_dir)) if f.endswith('.patch') or f.endswith('.diff')]
         for diff_file in diff_files:
             diff_file_path = os.path.join(task_dir, diff_dir, diff_file)
             if os.path.exists(diff_file_path):
-                apply_diff_command = ["git", "apply", diff_file_path]
-                subprocess.run(apply_diff_command, check=True, cwd=project_path)
-                print(f"[+] Applied diff from {diff_file_path} to {project_path}")
+                apply_diff_command = ["patch", "-p1"]
+                with open(diff_file_path, "rb") as patch_file:
+                    subprocess.run(apply_diff_command, stdin=patch_file, check=True, cwd=task_dir)
+                print(f"[+] Applied diff from {diff_file_path} to {task_dir}")
             else:
                 print(f"[!] Diff file {diff_file_path} does not exist")
 
@@ -334,7 +334,7 @@ def listen_for_tasks(
 
 if __name__ == "__main__":
     # Retrieve configuration from environment variables with default values
-    rabbitmq_host = os.environ.get("RABBITMQ_HOST", "localhost")
+    rabbitmq_host = os.environ.get("RABBITMQ_HOST", "http://localhost:5672")
     queue_name = os.environ.get("QUEUE_NAME", "seedgen_queue")
     database_url = os.environ.get(
         "DATABASE_URL",
