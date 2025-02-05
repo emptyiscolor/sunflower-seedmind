@@ -28,6 +28,5 @@ def get_functions(seedd: SeedD, harness_binary: str) -> List[FunctionInfo]:
 
 
 def locate_function(function: str, functions: List[FunctionInfo]) -> Optional[FunctionInfo]:
-    # TODO: handle missing function
     # TODO: handle multiple functions with the same name in C++
     return next((f for f in functions if f.name == function), None)
