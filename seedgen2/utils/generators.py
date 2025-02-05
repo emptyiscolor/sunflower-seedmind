@@ -62,8 +62,15 @@ class SeedGeneratorStore:
         wrapper_code = f'''#!/bin/sh
 for i in $(seq 0 {self.num_seeds - 1})
 do
-    python /app/generator.py "/app/output/seed_{generator_id}_$i"
-    if [ $? -ne 0 ]; then
+    timeout 5s python /app/generator.py "/app/output/seed_{generator_id}_$i"
+    exit_code=$?
+    if [ $exit_code -eq 124 ]; then
+        echo "Generator timed out after 5 seconds at iteration $i"
+        exit 1
+    elif [ $exit_code -eq 137 ]; then
+        echo "Generator was killed by the system at iteration $i. This is likely due to a timeout / OOM error."
+        exit 1
+    elif [ $exit_code -ne 0 ]; then
         echo "Generator failed at iteration $i"
         exit 1
     fi
