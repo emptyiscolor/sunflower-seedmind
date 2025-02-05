@@ -13,7 +13,7 @@
 
 using namespace llvm;
 
-bool is_usr_library(const Function *func) {
+bool should_skip(const Function *func) {
   if (llvm::DISubprogram *SP = func->getSubprogram()) {
     std::string Filename = SP->getFilename().str();
     std::string Directory = SP->getDirectory().str();
@@ -21,7 +21,7 @@ bool is_usr_library(const Function *func) {
         Directory.empty() ? Filename : Directory + "/" + Filename;
     return FullPath.compare(0, 4, "/usr") == 0;
   }
-  return true;
+  return false;
 }
 
 class SeedMindCFPass : public PassInfoMixin<SeedMindCFPass> {
@@ -48,7 +48,7 @@ public:
             false));
 
     for (auto &F : M.functions()) {
-      if (is_usr_library(&F)) {
+      if (should_skip(&F)) {
         continue;
       }
 
@@ -60,10 +60,7 @@ public:
               callee = callBase->getCalledOperand();
             } else {
               Function *calleeFunc = callBase->getCalledFunction();
-              if (is_usr_library(calleeFunc)) {
-                continue;
-              }
-              if (calleeFunc->isIntrinsic()) {
+              if (calleeFunc->isIntrinsic() || should_skip(calleeFunc)) {
                 continue;
               }
               callee = calleeFunc;
