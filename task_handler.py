@@ -10,23 +10,13 @@ import threading
 import functools
 from dataclasses import dataclass
 from typing import List
+from datetime import datetime, UTC
 
 import pika
 
-from sqlalchemy import (
-    create_engine,
-    Column,
-    String,
-    Integer,
-    DateTime,
-    Text
-)
-# For PostgreSQL; for SQLite you can use TEXT instead
-from sqlalchemy.dialects.postgresql import JSON
-from sqlalchemy.orm import sessionmaker, declarative_base
-from datetime import datetime, UTC
-
 from aixcc import build_and_run_targets
+
+import db
 
 
 @dataclass
@@ -141,14 +131,14 @@ def run_seedgen_for_task(task: TaskData):
 
     # Apply the diff files
     if diff_dir:
-        project_path = os.path.join(task_dir, task.focus)
         diff_files = [f for f in os.listdir(os.path.join(task_dir, diff_dir)) if f.endswith('.patch') or f.endswith('.diff')]
         for diff_file in diff_files:
             diff_file_path = os.path.join(task_dir, diff_dir, diff_file)
             if os.path.exists(diff_file_path):
-                apply_diff_command = ["git", "apply", diff_file_path]
-                subprocess.run(apply_diff_command, check=True, cwd=project_path)
-                print(f"[+] Applied diff from {diff_file_path} to {project_path}")
+                apply_diff_command = ["patch", "-p1"]
+                with open(diff_file_path, "rb") as patch_file:
+                    subprocess.run(apply_diff_command, stdin=patch_file, check=True, cwd=task_dir)
+                print(f"[+] Applied diff from {diff_file_path} to {task_dir}")
             else:
                 print(f"[!] Diff file {diff_file_path} does not exist")
 
@@ -169,37 +159,12 @@ def run_seedgen_for_task(task: TaskData):
     shutil.copytree(project_dir, os.path.join(task_dir, "result"))
 
 
-Base = declarative_base()
-
-
-class SeedRecord(Base):
-    __tablename__ = "seeds"
-
-    # Internal primary key
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    # Required fields
-    task_id = Column(String, nullable=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.now(UTC))
-    path = Column(String, nullable=False)  # path/to/seed_xxx.tar.gz
-    harness_name = Column(String, nullable=False)
-    # e.g., wild / seedgen / prime / etc.
-    fuzzer = Column(String, nullable=False)
-    coverage = Column(String, nullable=False)  # e.g., "69%"
-
-    # Optional metric JSON
-    metric = Column(JSON, nullable=True)  # store arbitrary JSON
-
-
 def save_result_to_db(task: TaskData, storage_dir: str, database_url: str):
     """
     Save the results of a TaskData to a DB pointed to by database_url,
     storing seeds in storage_dir.
     """
-    engine = create_engine(database_url, echo=False)
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine)
-    db_session = SessionLocal()
+    db_session = db.connect_database(database_url)
 
     task_result_dir = os.path.abspath(os.path.join(
         ".tmp", "tasks", str(task.task_id), "result"))
@@ -223,7 +188,7 @@ def save_result_to_db(task: TaskData, storage_dir: str, database_url: str):
                 tar.add(seed_dir, arcname=".")
 
             # Create DB record
-            new_seed_record = SeedRecord(
+            new_seed_record = db.Seed(
                 task_id=str(task.task_id),  # Ensure string
                 created_at=datetime.now(UTC),
                 path=seed_tar_gz_path,
@@ -297,6 +262,7 @@ def listen_for_tasks(
         try:
             run_seedgen_for_task(task)
             save_result_to_db(task, storage_dir, database_url)
+            print(f"[*] Seeds stored in DB for task {task.task_id}")
             cb = functools.partial(ack_nack_message, ch, method.delivery_tag)
             connection.add_callback_threadsafe(cb)
         except Exception as e:
@@ -334,7 +300,7 @@ def listen_for_tasks(
 
 if __name__ == "__main__":
     # Retrieve configuration from environment variables with default values
-    rabbitmq_host = os.environ.get("RABBITMQ_HOST", "localhost")
+    rabbitmq_host = os.environ.get("RABBITMQ_HOST", "http://localhost:5672")
     queue_name = os.environ.get("QUEUE_NAME", "seedgen_queue")
     database_url = os.environ.get(
         "DATABASE_URL",
