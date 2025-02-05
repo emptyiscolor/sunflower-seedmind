@@ -4,7 +4,7 @@
 # 2. Generating the subsequent rounds of the script, based on previous scripts and seed format documentation
 
 
-from seedgen2.presets import SeedGen2GenerativeModel
+from seedgen2.presets import SeedGen2InferModel
 from seedgen2.graphs.sowbot import Sowbot
 from seedgen2.utils.grpc import SeedD
 
@@ -23,8 +23,7 @@ def generate_first_script(
         harness_source_code: str,
         harness_binary: str
 ):
-    # Use generative model to generate the initial script
-    model = SeedGen2GenerativeModel().model
+    model = SeedGen2InferModel().model
     prompt = PROMPT_GENERATE_FIRST_SCRIPT
     context = CONTEXT_GENERATE_FIRST_SCRIPT.format(
         harness_source_code=harness_source_code

@@ -37,7 +37,7 @@ class SeedGen2KnowledgeableModel(BaseModel):
 @singleton
 class SeedGen2GenerativeModel(BaseModel):
     def __init__(self):
-        super().__init__("SEEDGEN_GENERATIVE_MODEL", "o1")
+        super().__init__("SEEDGEN_GENERATIVE_MODEL", "claude-3.5-sonnet")
 
 
 @singleton
@@ -50,4 +50,4 @@ class SeedGen2RefinerModel(BaseModel):
 @singleton
 class SeedGen2InferModel(BaseModel):
     def __init__(self):
-        super().__init__("SEEDGEN_INFER_MODEL", "o1")
+        super().__init__("SEEDGEN_INFER_MODEL", "o3-mini")
