@@ -1,7 +1,7 @@
 import logging
 from typing import List
 from seedgen2.graphs.plainbot import Plainbot
-from seedgen2.presets import SeedGen2GenerativeModel
+from seedgen2.presets import SeedGen2GenerativeModel, SeedGen2InferModel
 from seedgen2.graphs.sowbot import Sowbot, SowbotResult
 from seedgen2.utils.grpc import SeedD
 from seedgen2.utils.seeds import SeedFeedback
@@ -87,7 +87,7 @@ def update_doc(
     related_functions = get_related_functions(
         seedd, functions, harness_binary, "LLVMFuzzerTestOneInput")
 
-    model = SeedGen2GenerativeModel().model
+    model = SeedGen2InferModel().model
 
     if previous_doc == "":
         prompt = PROMPT_GENERATE_STRUCTURE_DOCUMENTATION.format(
