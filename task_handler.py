@@ -87,7 +87,7 @@ def extract_from_storage(tar_path: str, dest_dir: str) -> str:
     with tarfile.open(tar_path, 'r:gz') as tar:
         top_level_dirs = set()
         for member in tar.getmembers():
-            root = member.name.split('/')[0]
+            root = os.path.normpath(member.name).split('/')[0]
             if root:  # Make sure it's not empty
                 top_level_dirs.add(root)
 
@@ -190,7 +190,6 @@ def save_result_to_db(task: TaskData, storage_dir: str, database_url: str):
             # Create DB record
             new_seed_record = db.Seed(
                 task_id=str(task.task_id),  # Ensure string
-                created_at=datetime.now(UTC),
                 path=seed_tar_gz_path,
                 harness_name=subdir,
                 fuzzer="seedgen",
