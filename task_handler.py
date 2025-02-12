@@ -131,16 +131,29 @@ def run_seedgen_for_task(task: TaskData):
 
     # Apply the diff files
     if diff_dir:
-        diff_files = [f for f in os.listdir(os.path.join(task_dir, diff_dir)) if f.endswith('.patch') or f.endswith('.diff')]
-        for diff_file in diff_files:
-            diff_file_path = os.path.join(task_dir, diff_dir, diff_file)
-            if os.path.exists(diff_file_path):
-                apply_diff_command = ["patch", "-p1"]
-                with open(diff_file_path, "rb") as patch_file:
-                    subprocess.run(apply_diff_command, stdin=patch_file, check=True, cwd=task_dir)
-                print(f"[+] Applied diff from {diff_file_path} to {task_dir}")
-            else:
-                print(f"[!] Diff file {diff_file_path} does not exist")
+        diff_path = os.path.join(task_dir, diff_dir)
+        apply_diff_command = ["patch", "--batch", "--no-backup-if-mismatch", "-p1"]
+        
+        if os.path.isfile(diff_path) and (diff_path.endswith('.patch') or diff_path.endswith('.diff')):
+            # diff_dir is a file, so apply it directly
+            with open(diff_path, "rb") as patch_file:
+                subprocess.run(apply_diff_command, stdin=patch_file, check=True, cwd=task_dir)
+            print(f"[+] Applied diff from {diff_path} to {task_dir}")
+        
+        elif os.path.isdir(diff_path):
+            # diff_dir is a directory, so iterate over contained patch/diff files
+            diff_files = [f for f in os.listdir(diff_path) if f.endswith('.patch') or f.endswith('.diff')]
+            for diff_file in diff_files:
+                diff_file_path = os.path.join(diff_path, diff_file)
+                if os.path.exists(diff_file_path):
+                    with open(diff_file_path, "rb") as patch_file:
+                        subprocess.run(apply_diff_command, stdin=patch_file, check=True, cwd=task_dir)
+                    print(f"[+] Applied diff from {diff_file_path} to {task_dir}")
+                else:
+                    print(f"[!] Diff file {diff_file_path} does not exist")
+        else:
+            print(f"[!] The provided diff path {diff_path} is neither a valid file nor a directory.")
+
 
     # Invoke seedgen (build_and_run_targets from aixcc)
     build_and_run_targets(
