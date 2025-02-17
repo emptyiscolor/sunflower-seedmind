@@ -54,6 +54,7 @@ class SeedMiniAgent:
             harness_file_name=self.harness_binary,
             project_name=self.project_name,
         )
+        filetype_result = filetype_result.translate(str.maketrans('', '', "\"'`")) # remove quotes and ticks
 
         # 2. Generate the complete generator script
         if filetype_result == "unknown":
