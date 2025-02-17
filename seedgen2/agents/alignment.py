@@ -101,3 +101,24 @@ def update_doc(
 
     plainbot = Plainbot(model=model)
     return plainbot.run(prompt)
+
+
+def update_doc_mini(
+        harness_source: str,
+        harness_binary: str,
+        previous_doc: str = "",
+) -> str:
+    model = SeedGen2InferModel().model
+
+    if previous_doc == "":
+        prompt = PROMPT_GENERATE_STRUCTURE_DOCUMENTATION.format(
+            related_functions=harness_source
+        )
+    else:
+        prompt = PROMPT_IMPROVE_STRUCTURE_DOCUMENTATION.format(
+            related_functions=harness_source,
+            structure_documentation=previous_doc
+        )
+
+    plainbot = Plainbot(model=model)
+    return plainbot.run(prompt)

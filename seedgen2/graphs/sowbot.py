@@ -257,7 +257,16 @@ class Sowbot:
         store = SeedGeneratorStore()
         seeds = generator_run_result.get_seed_paths()
         generator_script = store.get_generator(generator_id)
-        seed_feedback = run_seeds(self.seedd, self.harness_binary, seeds)
+        if self.seedd:
+            seed_feedback = run_seeds(self.seedd, self.harness_binary, seeds)
+        else:
+            # Empty SeedD means Seedgen is running in mini mode
+            # So we don't run and evaluate seeds at all
+            seed_feedback = SeedFeedback(
+                coverage_info=None,
+                partially_covered_functions=None,
+                report=None,
+            )
 
         tracker = Tracker()
         tracker.add_trace(

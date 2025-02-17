@@ -161,7 +161,8 @@ def run_seedgen_for_task(task: TaskData):
         harness_binaries=[],
         src_path=os.path.join(task_dir, task.focus),
         fuzz_tooling=os.path.join(task_dir, fuzz_tooling_dir),
-        all=True
+        all=True,
+        mini=False
     )
 
     # Copy the result out to task_dir
