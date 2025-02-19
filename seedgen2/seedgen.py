@@ -85,19 +85,13 @@ class SeedGenAgent:
             project_name=self.project_name,
         )
 
+        filetype_result = filetype_result.translate(str.maketrans('', '', "\"'`")) # remove quotes and ticks
+
         logging.info(f"Identified file type: {filetype_result}")
 
         if filetype_result == "unknown":
             logging.info(f"Unknown filetype, skipping script regeneration")
             return prev_result
-        
-        # reference_script_path = f"/workspaces/sunflower/seedgen2/agents/generators/{filetype_result}.py"
-        # reference_script_exist = os.path.isfile(reference_script_path)
-        # reference_script = ""
-        # if reference_script_exist:
-        #     logging.info(f"Generator for {filetype_result} exists, using it for the prompt")
-        #     with open(reference_script_path, "r") as f:
-        #         reference_script = f.read()
 
         reference_script = generate_reference_script(self.seedd, self.harness_binary, filetype_result)
 
@@ -140,18 +134,6 @@ class SeedGenAgent:
         
         current_result = align_script(
                 self.seedd, current_result.generator_script, current_doc, self.harness_binary)
-        
-        # Experimental coverage agent
-        # current_result = generate_based_on_coverage(
-        #     self.seedd,
-        #     current_result,
-        #     functions,
-        #     current_doc,
-        #     self.harness_binary,
-        #     harness_info.source_code,
-        #     "LLVMFuzzerTestOneInput",
-        #     2)
-
 
         # Finally, evaluate the coverage
         merged_coverage_report = get_merged_coverage(self.seedd, self.harness_binary)

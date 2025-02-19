@@ -11,6 +11,7 @@ import subprocess
 import shutil
 
 from seedgen2.seedgen import SeedGenAgent
+from seedgen2.seedmini import SeedMiniAgent
 
 
 def parse_args():
@@ -46,6 +47,11 @@ def parse_args():
         action="store_true",
         help="Run seedgen on all fuzz target binaries",
     )
+    parser.add_argument(
+        "--mini",
+        action="store_true",
+        help="Run seedgen mini mode",
+    )
     return parser.parse_args()
 
 
@@ -77,7 +83,7 @@ def load_project_config(project_yaml_path):
         if "language" not in project_config:
             raise ValueError("language not found in project.yaml")
 
-        if project_config["language"] not in ["c", "c++"]:
+        if project_config["language"] not in ["c", "c++", "java", "jvm"]:
             raise ValueError("Unsupported project language")
 
         return project_config
@@ -338,21 +344,97 @@ def get_prebuilt_binary_path(binary_name):
     return binary_path
 
 
-def main():
-    args = parse_args()
-    project_name = args.project_name
-    harness_binaries = args.harness_binaries
-    src_path = args.src_path
-    root = args.root
-    rebuild = args.rebuild
-    all = args.all
+def find_files_with_fuzzer_function(src_path, oss_fuzz_project_dir, is_java):
+    """
+    Iterates over all files under src_path and oss_fuzz_project_dir.
+    For non-Java projects, it looks for the string "LLVMFuzzerTestOneInput".
+    For Java projects, it looks for the string "fuzzerTestOneInput".
+    
+    Returns:
+        dict: A dictionary where each key is a filename (without its extension) and
+              the corresponding value is the file's content.
+    """
+    import os
 
+    result = {}
+    search_dirs = []
+
+    # Validate and add directories if they exist
+    if src_path and os.path.exists(src_path):
+        search_dirs.append(src_path)
+    if oss_fuzz_project_dir and os.path.exists(oss_fuzz_project_dir):
+        search_dirs.append(oss_fuzz_project_dir)
+
+    # Determine the target string based on project language
+    target_string = "fuzzerTestOneInput" if is_java else "LLVMFuzzerTestOneInput"
+
+    for directory in search_dirs:
+        for root, _, files in os.walk(directory):
+            for filename in files:
+                file_path = os.path.join(root, filename)
+                file_base, _ = os.path.splitext(filename)
+                try:
+                    with open(file_path, "r", errors="replace") as f:
+                        content = f.read()
+                except Exception:
+                    # Skip files that cannot be read as text
+                    continue
+
+                if target_string in content:
+                    result[file_base] = content
+
+    return result
+
+
+def build_and_run_targets(project_name, harness_binaries, src_path, root, rebuild=False, all=False, mini=False):
     os.makedirs(".tmp", exist_ok=True)
-    try:
-        project_yaml_path = validate_environment(root, project_name)
-        project_config = load_project_config(project_yaml_path)
-        print_project_info(project_name, project_config)
 
+    project_yaml_path = validate_environment(root, project_name)
+    project_config = load_project_config(project_yaml_path)
+    print_project_info(project_name, project_config)
+
+    is_java = project_config["language"] in ["jvm", "java"]
+
+    if is_java or mini:
+        run_mini_mode(project_name, project_config, harness_binaries, src_path, root, all)
+    else:
+        run_full_mode(project_name, project_config, harness_binaries, src_path, root, rebuild, all)
+
+
+def run_mini_mode(project_name, project_config, harness_binaries, src_path, root, all=False):
+    try:
+        artifacts_dir = os.path.abspath(os.path.join(".tmp", project_name))
+        os.makedirs(artifacts_dir, exist_ok=True)
+
+        # determine the runtime id. We get the largest number and plus one
+        runtime_ids = [int(d) for d in os.listdir(artifacts_dir) if d.isdigit()]
+        runtime_id = max(runtime_ids) + 1 if runtime_ids else 0
+
+        project_dir = os.path.join(artifacts_dir, str(runtime_id))
+        oss_fuzz_project_dir = os.path.join(root, "projects", project_name)
+        is_java = project_config["language"] in ["jvm", "java"]
+
+        fuzzers = find_files_with_fuzzer_function(src_path, oss_fuzz_project_dir, is_java)
+
+        if all:
+            print(f"[*] The flag --all is enabled, running seedgen on all fuzzers: {list(fuzzers.keys())}")
+            harness_binaries = list(fuzzers.keys())
+
+        for harness_binary in harness_binaries:
+            if harness_binary not in fuzzers:
+                continue
+            fuzzer_dir = os.path.join(project_dir, harness_binary)
+            agent = SeedMiniAgent(fuzzer_dir, project_name, harness_binary, fuzzers[harness_binary])
+            agent.run()
+
+
+    except (FileNotFoundError, ValueError) as e:
+        print(f"[-] Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def run_full_mode(project_name, project_config, harness_binaries, src_path, root, rebuild=False, all=False):
+    try:
         # Compile the project
         fuzzers = compile_project(root, project_name, project_config, src_path, rebuild)
         if all:
@@ -383,6 +465,19 @@ def main():
         if "container_id" in locals():
             print(f"[-] Stopping container {container_id}")
             subprocess.run(["docker", "stop", container_id], check=True)
+            
+
+def main():
+    args = parse_args()
+    project_name = args.project_name
+    harness_binaries = args.harness_binaries
+    src_path = args.src_path
+    root = args.root
+    rebuild = args.rebuild
+    all = args.all
+    mini = args.mini
+
+    build_and_run_targets(project_name, harness_binaries, src_path, root, rebuild, all, mini)
 
 
 if __name__ == "__main__":
