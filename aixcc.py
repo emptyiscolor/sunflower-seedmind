@@ -155,7 +155,7 @@ def compile_project(fuzz_tooling, project_name, project_config, src_path):
     build_command = [
         f"{fuzz_tooling}/infra/helper.py",
         "build_image",
-        "--pull",
+        "--no-pull",
         project_name,
     ]
 

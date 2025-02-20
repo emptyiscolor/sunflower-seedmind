@@ -137,8 +137,8 @@ def run_seedgen_for_task(task: TaskData):
         if os.path.isfile(diff_path) and (diff_path.endswith('.patch') or diff_path.endswith('.diff')):
             # diff_dir is a file, so apply it directly
             with open(diff_path, "rb") as patch_file:
-                subprocess.run(apply_diff_command, stdin=patch_file, check=True, cwd=task_dir)
-            print(f"[+] Applied diff from {diff_path} to {task_dir}")
+                subprocess.run(apply_diff_command, stdin=patch_file, check=True, cwd=os.path.join(task_dir, task.focus))
+            print(f"[+] Applied diff from {diff_path} to {os.path.join(task_dir, task.focus)}")
         
         elif os.path.isdir(diff_path):
             # diff_dir is a directory, so iterate over contained patch/diff files
