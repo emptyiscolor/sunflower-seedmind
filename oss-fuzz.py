@@ -142,7 +142,7 @@ def compile_project(root, project_name, project_config, src_path, rebuild):
         root, "projects", project_name, "Dockerfile")
     if not os.path.exists(dockerfile_path):
         raise FileNotFoundError("Dockerfile not found in project directory")
-    if subprocess.run(["docker", "--version"]).returncode != 0:
+    if subprocess.run(["docker", "ps"]).returncode != 0:
         raise FileNotFoundError("Docker not found on the host machine")
 
     cache_dir = os.path.join(".tmp", "cache", project_name)

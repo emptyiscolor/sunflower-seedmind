@@ -138,7 +138,7 @@ def compile_project(fuzz_tooling, project_name, project_config, src_path):
         fuzz_tooling, "projects", project_name, "Dockerfile")
     if not os.path.exists(dockerfile_path):
         raise FileNotFoundError("Dockerfile not found in project directory")
-    if subprocess.run(["docker", "--version"]).returncode != 0:
+    if subprocess.run(["docker", "ps"]).returncode != 0:
         raise FileNotFoundError("Docker not found on the host machine")
     
     if src_path:
