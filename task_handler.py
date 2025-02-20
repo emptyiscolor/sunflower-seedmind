@@ -147,8 +147,8 @@ def run_seedgen_for_task(task: TaskData):
                 diff_file_path = os.path.join(diff_path, diff_file)
                 if os.path.exists(diff_file_path):
                     with open(diff_file_path, "rb") as patch_file:
-                        subprocess.run(apply_diff_command, stdin=patch_file, check=True, cwd=task_dir)
-                    print(f"[+] Applied diff from {diff_file_path} to {task_dir}")
+                        subprocess.run(apply_diff_command, stdin=patch_file, check=True, cwd=os.path.join(task_dir, task.focus))
+                    print(f"[+] Applied diff from {diff_file_path} to {os.path.join(task_dir, task.focus)}")
                 else:
                     print(f"[!] Diff file {diff_file_path} does not exist")
         else:
