@@ -132,6 +132,26 @@ def find_fuzzers(project_out_dir):
     return fuzzers
 
 
+def workdir_from_dockerfile(fuzz_tooling, project_name):
+    WORKDIR_REGEX = re.compile(r'\s*WORKDIR\s*([^\s]+)')
+    dockerfile_path = os.path.join(
+        fuzz_tooling, "projects", project_name, "Dockerfile")
+    with open(dockerfile_path) as file_handle:
+        lines = file_handle.readlines()
+    for line in reversed(lines):  # reversed to get last WORKDIR.
+        match = re.match(WORKDIR_REGEX, line)
+        if match:
+            workdir = match.group(1)
+            workdir = workdir.replace('$SRC', '/src')
+
+            if not os.path.isabs(workdir):
+                workdir = os.path.join('/src', workdir)
+
+            return os.path.normpath(workdir)
+    
+    return os.path.join('/src', project_name)
+
+
 # Compile the project, the artifacts will be stored in <fuzz_tooling>/build/out/<project_name>/
 def compile_project(fuzz_tooling, project_name, project_config, src_path):
     dockerfile_path = os.path.join(
@@ -180,10 +200,11 @@ def compile_project(fuzz_tooling, project_name, project_config, src_path):
         os.chmod(dest, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
     # Setup the environment variables
+    workdir = workdir_from_dockerfile(fuzz_tooling, project_name)
     environment_configs = {
         # Use Argus to compile the project
-        "CC": f"/src/{project_name}/42_B3YOND_TOOLS/clang-argus",
-        "CXX": f"/src/{project_name}/42_B3YOND_TOOLS/clang-argus++",
+        "CC": f"{workdir}/42_B3YOND_TOOLS/clang-argus",
+        "CXX": f"{workdir}/42_B3YOND_TOOLS/clang-argus++",
         # Argus settings (see https://github.com/whexy/argus for more details)
         "ADD_ADDITIONAL_PASSES": "SeedMindCFPass.so",
         "ADD_RUNTIME": "1",
@@ -281,7 +302,8 @@ def run_project(fuzz_tooling, image_name, project_name, src_path) -> tuple[str, 
     if src_path:
         if not os.path.exists(os.path.abspath(src_path)):
             raise FileNotFoundError(f"Local source path {os.path.abspath(src_path)} doesn't exist")
-        mount_configs[f"/src/{project_name}"] = os.path.abspath(src_path)
+        workdir = workdir_from_dockerfile(fuzz_tooling, project_name)
+        mount_configs[f"{workdir}"] = os.path.abspath(src_path)
     mount_commands = list(
         itertools.chain.from_iterable(
             ("-v", f"{src}:{dest}") for dest, src in mount_configs.items()
