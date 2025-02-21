@@ -9,6 +9,7 @@ import argparse
 import yaml
 import subprocess
 import shutil
+import re
 
 from seedgen2.seedgen import SeedGenAgent
 from seedgen2.seedmini import SeedMiniAgent
@@ -136,6 +137,26 @@ def find_fuzzers(project_out_dir):
     return fuzzers
 
 
+def workdir_from_dockerfile(fuzz_tooling, project_name):
+    WORKDIR_REGEX = re.compile(r'\s*WORKDIR\s*([^\s]+)')
+    dockerfile_path = os.path.join(
+        fuzz_tooling, "projects", project_name, "Dockerfile")
+    with open(dockerfile_path) as file_handle:
+        lines = file_handle.readlines()
+    for line in reversed(lines):  # reversed to get last WORKDIR.
+        match = re.match(WORKDIR_REGEX, line)
+        if match:
+            workdir = match.group(1)
+            workdir = workdir.replace('$SRC', '/src')
+
+            if not os.path.isabs(workdir):
+                workdir = os.path.join('/src', workdir)
+
+            return os.path.normpath(workdir)
+    
+    return os.path.join('/src', project_name)
+
+
 # Compile the project, the artifacts will be stored in .tmp/cache/<project_name>/out
 def compile_project(root, project_name, project_config, src_path, rebuild):
     dockerfile_path = os.path.join(
@@ -196,7 +217,8 @@ def compile_project(root, project_name, project_config, src_path, rebuild):
     if src_path:
         if not os.path.exists(os.path.abspath(src_path)):
             raise FileNotFoundError(f"Local source path {os.path.abspath(src_path)} doesn't exist")
-        mount_configs[f"/src/{project_name}"] = os.path.abspath(src_path)
+        workdir = workdir_from_dockerfile(root, project_name)
+        mount_configs[f"{workdir}"] = os.path.abspath(src_path)
     mount_commands = list(
         itertools.chain.from_iterable(
             ("-v", f"{src}:{dest}") for dest, src in mount_configs.items()
@@ -295,7 +317,8 @@ def run_project(root, project_name, project_config, src_path) -> tuple[str, str]
     if src_path:
         if not os.path.exists(os.path.abspath(src_path)):
             raise FileNotFoundError(f"Local source path {os.path.abspath(src_path)} doesn't exist")
-        mount_configs[f"/src/{project_name}"] = os.path.abspath(src_path)
+        workdir = workdir_from_dockerfile(root, project_name)
+        mount_configs[f"{workdir}"] = os.path.abspath(src_path)
     mount_commands = list(
         itertools.chain.from_iterable(
             ("-v", f"{src}:{dest}") for dest, src in mount_configs.items()
