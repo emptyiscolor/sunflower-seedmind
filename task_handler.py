@@ -10,11 +10,17 @@ import threading
 import functools
 from dataclasses import dataclass
 from typing import List
-from datetime import datetime, UTC
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pika
 
-from aixcc import build_and_run_targets
+from aixcc import (
+    validate_environment,
+    load_project_config,
+    print_project_info,
+    run_mini_mode,
+    run_full_mode
+)
 
 import db
 
@@ -28,52 +34,6 @@ class TaskData:
     repo: List[str]         # A list of URLs to .tar.gz files
     fuzz_tooling: str       # A URL to a .tar.gz file
     diff: str               # Another URL to a .tar.gz file
-
-
-def download_and_extract(url: str, dest_dir: str) -> str:
-    """
-    Download a .tar.gz file from the given URL into dest_dir,
-    then extract it. Removes the .tar.gz file after extraction.
-
-    Returns
-    -------
-    str:
-        The top-level directory name that was extracted.
-        If the tar contains multiple top-level dirs, returns None.
-        If the URL is empty/invalid, returns an empty string.
-    """
-    if not url:
-        return ""
-
-    # Ensure the destination directory exists
-    os.makedirs(dest_dir, exist_ok=True)
-
-    # Download filename (e.g., https://example.com/foo.tar.gz -> foo.tar.gz)
-    filename = os.path.join(dest_dir, os.path.basename(url))
-
-    # Download the file
-    with requests.get(url, stream=True) as r:
-        r.raise_for_status()  # Raise an HTTPError if status != 200
-        with open(filename, 'wb') as f:
-            shutil.copyfileobj(r.raw, f)
-
-    # Inspect the tarfile to figure out the top-level directory
-    with tarfile.open(filename, 'r:gz') as tar:
-        top_level_dirs = set()
-        for member in tar.getmembers():
-            root = member.name.split('/')[0]
-            if root:  # Make sure it's not empty
-                top_level_dirs.add(root)
-
-        # Extract all files
-        tar.extractall(path=dest_dir)
-
-    # If there's exactly one top-level directory, return it
-    if len(top_level_dirs) == 1:
-        return top_level_dirs.pop()
-
-    # Otherwise, we didn't get exactly one top-level dir
-    return None
 
 
 def extract_from_storage(tar_path: str, dest_dir: str) -> str:
@@ -101,14 +61,13 @@ def extract_from_storage(tar_path: str, dest_dir: str) -> str:
     return None
 
 
-def run_seedgen_for_task(task: TaskData):
+def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str):
     """
     Given a TaskData, extract the repos, fuzzing_tooling, diff archives
     into a .tmp/tasks/<task_id> folder and run build_and_run_targets.
     """
     # Create a directory for this task
-    task_dir = os.path.abspath(os.path.join(
-        ".tmp", "tasks", str(task.task_id)))
+    task_dir = os.path.abspath(os.path.join(".tmp", "tasks", str(task.task_id)))
     os.makedirs(task_dir, exist_ok=True)
 
     # Extract repos
@@ -129,19 +88,15 @@ def run_seedgen_for_task(task: TaskData):
     print(f"- Fuzz tooling extracted into: {fuzz_tooling_dir}")
     print(f"- Diff extracted into: {diff_dir}")
 
-    # Apply the diff files
+    # Apply the diff files (code omitted for brevity)
     if diff_dir:
         diff_path = os.path.join(task_dir, diff_dir)
         apply_diff_command = ["patch", "--batch", "--no-backup-if-mismatch", "-p1"]
-        
         if os.path.isfile(diff_path) and (diff_path.endswith('.patch') or diff_path.endswith('.diff')):
-            # diff_dir is a file, so apply it directly
             with open(diff_path, "rb") as patch_file:
                 subprocess.run(apply_diff_command, stdin=patch_file, check=True, cwd=os.path.join(task_dir, task.focus))
             print(f"[+] Applied diff from {diff_path} to {os.path.join(task_dir, task.focus)}")
-        
         elif os.path.isdir(diff_path):
-            # diff_dir is a directory, so iterate over contained patch/diff files
             diff_files = [f for f in os.listdir(diff_path) if f.endswith('.patch') or f.endswith('.diff')]
             for diff_file in diff_files:
                 diff_file_path = os.path.join(diff_path, diff_file)
@@ -154,64 +109,83 @@ def run_seedgen_for_task(task: TaskData):
         else:
             print(f"[!] The provided diff path {diff_path} is neither a valid file nor a directory.")
 
+    # Prepare for seed generation
+    fuzz_tooling = os.path.join(task_dir, fuzz_tooling_dir)
+    os.makedirs(".tmp", exist_ok=True)
 
-    # Invoke seedgen (build_and_run_targets from aixcc)
-    build_and_run_targets(
-        project_name=task.project_name,
-        harness_binaries=[],
-        src_path=os.path.join(task_dir, task.focus),
-        fuzz_tooling=os.path.join(task_dir, fuzz_tooling_dir),
-        all=True,
-        mini=False
-    )
+    project_yaml_path = validate_environment(fuzz_tooling, task.project_name)
+    project_config = load_project_config(project_yaml_path)
+    print_project_info(task.project_name, project_config)
 
-    # Copy the result out to task_dir
-    artifacts_dir = os.path.abspath(os.path.join(".tmp", task.project_name))
-    runtime_id = max([int(d)
-                     for d in os.listdir(artifacts_dir) if d.isdigit()])
-    project_dir = os.path.join(artifacts_dir, str(runtime_id))
-    shutil.copytree(project_dir, os.path.join(task_dir, "result"))
+    # Run SeedMini and SeedGen in parallel using a thread pool
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_mini = executor.submit(
+            run_mini_mode,
+            task.project_name,
+            project_config,
+            os.path.join(task_dir, task.focus),
+            os.path.join(task_dir, fuzz_tooling_dir),
+            save_result_to_db,
+            task,
+            database_url,
+            storage_dir
+        )
+        future_full = executor.submit(
+            run_full_mode,
+            task.project_name,
+            project_config,
+            os.path.join(task_dir, task.focus),
+            os.path.join(task_dir, fuzz_tooling_dir),
+            save_result_to_db,
+            task,
+            database_url,
+            storage_dir
+        )
+
+        for future in as_completed([future_mini, future_full]):
+            try:
+                future.result()
+            except Exception as exc:
+                print(f"[!] A seed generation process generated an exception: {exc}")
 
 
-def save_result_to_db(task: TaskData, storage_dir: str, database_url: str):
+def save_result_to_db(
+    database_url: str,
+    storage_dir: str,
+    task: TaskData,
+    harness_binary: str,
+    seed_dir: str,
+    seed_type: str,
+    coverage: float = 0,
+    metric: str = ""
+):
     """
-    Save the results of a TaskData to a DB pointed to by database_url,
+    Save Seedgen/SeedMini result for a harness to a DB pointed to by database_url,
     storing seeds in storage_dir.
     """
     db_session = db.connect_database(database_url)
 
-    task_result_dir = os.path.abspath(os.path.join(
-        ".tmp", "tasks", str(task.task_id), "result"))
-
-    # Peek into the result directory
-    root, dirs, files = next(os.walk(task_result_dir))
-
-    # Filter out the unwanted subdirs
-    dirs = [d for d in dirs if d not in ("out", "work", "shared")]
-
     try:
-        for subdir in dirs:
-            # Compress and copy seeds to shared volume
-            seed_dir = os.path.join(task_result_dir, subdir, "seeds")
-            seedgen_storage_dir = os.path.join(
-                storage_dir, "seedgen", str(task.task_id))
-            os.makedirs(seedgen_storage_dir, exist_ok=True)
-            seed_tar_gz_path = os.path.join(seedgen_storage_dir, f"seedgen_{
-                                            task.task_id}_{subdir}.tar.gz")
-            with tarfile.open(seed_tar_gz_path, "w:gz") as tar:
-                tar.add(seed_dir, arcname=".")
+        # Compress and copy seeds to shared volume
+        seed_storage_dir = os.path.join(
+            storage_dir, seed_type, str(task.task_id))
+        os.makedirs(seed_storage_dir, exist_ok=True)
+        seed_tar_gz_path = os.path.join(seed_storage_dir, f"{seed_type}_{
+                                        task.task_id}_{harness_binary}.tar.gz")
+        with tarfile.open(seed_tar_gz_path, "w:gz") as tar:
+            tar.add(seed_dir, arcname=".")
 
-            # Create DB record
-            new_seed_record = db.Seed(
-                task_id=str(task.task_id),  # Ensure string
-                path=seed_tar_gz_path,
-                harness_name=subdir,
-                fuzzer="seedgen",
-                coverage=0.6969,
-                metric=None
-            )
-            db_session.add(new_seed_record)
-            db_session.commit()
+        # Create DB record
+        new_seed_record = db.Seed(
+            task_id=str(task.task_id),  # Ensure string
+            path=seed_tar_gz_path,
+            harness_name=harness_binary,
+            fuzzer=seed_type,
+            coverage=coverage,
+            metric=metric
+        )
+        db_session.add(new_seed_record)
+        db_session.commit()
     except Exception as e:
         db_session.rollback()
         print("Error occurred:", e)
@@ -273,9 +247,9 @@ def listen_for_tasks(
 
     def process_task(connection, ch, method, task):
         try:
-            run_seedgen_for_task(task)
-            save_result_to_db(task, storage_dir, database_url)
-            print(f"[*] Seeds stored in DB for task {task.task_id}")
+            run_seedgen_for_task(task, database_url, storage_dir)
+            # save_result_to_db(task, storage_dir, database_url)
+            # print(f"[*] Seeds stored in DB for task {task.task_id}")
             cb = functools.partial(ack_nack_message, ch, method.delivery_tag)
             connection.add_callback_threadsafe(cb)
         except Exception as e:

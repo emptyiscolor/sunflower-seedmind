@@ -3,7 +3,7 @@
 
 import os
 import subprocess
-from seedgen2.utils.singleton import singleton
+from seedgen2.utils.singleton import tls_singleton
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -24,7 +24,7 @@ class GeneratorRunResult:
         return self.error_message
 
 
-@singleton
+@tls_singleton
 class SeedGeneratorStore:
     def __init__(self, num_seeds: int = 100):
         self.result_dir = ""
