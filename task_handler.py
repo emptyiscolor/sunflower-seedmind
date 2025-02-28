@@ -142,11 +142,15 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str):
             storage_dir
         )
 
+        errors = []
         for future in as_completed([future_mini, future_full]):
             try:
                 future.result()
             except Exception as exc:
                 print(f"[!] A seed generation process generated an exception: {exc}")
+                errors.append(exc)
+        if errors:
+            raise Exception("One or more harnesses failed")
 
 
 def save_result_to_db(
@@ -189,6 +193,7 @@ def save_result_to_db(
     except Exception as e:
         db_session.rollback()
         print("Error occurred:", e)
+        raise
     finally:
         db_session.close()
 
@@ -197,7 +202,8 @@ def listen_for_tasks(
     rabbitmq_host: str,
     queue_name: str,
     database_url: str,
-    storage_dir: str
+    storage_dir: str,
+    prefetch_count: int
 ):
     """
     Connect to RabbitMQ, listen for tasks in JSON format on `queue_name`,
@@ -211,10 +217,10 @@ def listen_for_tasks(
     channel = connection.channel()
 
     # 2. Make sure the queue exists (idempotent)
-    # channel.queue_declare(
-    #     queue=queue_name,
-    #     durable=True
-    # )
+    channel.queue_declare(
+        queue=queue_name,
+        durable=True
+    )
 
     # 3. Define a callback to process messages
     def callback(ch, method, properties, body, connection):
@@ -238,26 +244,51 @@ def listen_for_tasks(
 
             # Start a new thread for processing
             processing_thread = threading.Thread(
-                target=process_task, args=(connection, ch, method, task))
+                target=process_task, args=(connection, ch, method, properties, body, task))
             processing_thread.start()
 
         except Exception as e:
-            print(f"[!] Failed to parse or process task: {e}")
+            print(f"[!] Failed to parse task: {e}")
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
-    def process_task(connection, ch, method, task):
+    def process_task(connection, ch, method, properties, body, task):
         try:
             run_seedgen_for_task(task, database_url, storage_dir)
-            # save_result_to_db(task, storage_dir, database_url)
-            # print(f"[*] Seeds stored in DB for task {task.task_id}")
+            print(f"[*] Seedgen workflow finished for task {task.task_id}")
             cb = functools.partial(ack_nack_message, ch, method.delivery_tag)
             connection.add_callback_threadsafe(cb)
         except Exception as e:
             print(f"[!] Error processing task {task.task_id}: {e}")
             print(traceback.format_exc())
-            cb = functools.partial(ack_nack_message, ch,
-                                   method.delivery_tag, True)
-            connection.add_callback_threadsafe(cb)
+
+            # Retrieve the current retry count from message headers.
+            retry_count = 0
+            if properties.headers and "x-retry" in properties.headers:
+                retry_count = properties.headers["x-retry"]
+
+            if retry_count < 3:
+                new_retry = retry_count + 1
+                print(f"[!] Requeuing task {task.task_id}, attempt {new_retry}")
+                # Create updated headers with the new retry count.
+                new_headers = properties.headers.copy() if properties.headers else {}
+                new_headers["x-retry"] = new_retry
+                new_props = pika.BasicProperties(headers=new_headers)
+                # Republish to the same queue (using queue_name from the parent scope)
+                connection.add_callback_threadsafe(
+                    lambda: ch.basic_publish(
+                        exchange="",
+                        routing_key=queue_name,
+                        body=body,
+                        properties=new_props
+                    )
+                )
+            else:
+                print(f"[!] Task {task.task_id} failed after {retry_count} attempts. Not requeuing.")
+
+            # In any case, acknowledge the original message so it is removed from the queue.
+            connection.add_callback_threadsafe(
+                lambda: ack_nack_message(ch, method.delivery_tag)
+            )
 
     def ack_nack_message(channel, delivery_tag, nack=False):
         if channel.is_open:
@@ -269,7 +300,7 @@ def listen_for_tasks(
             raise pika.exceptions.StreamLostError
 
     # 4. Start consuming messages
-    channel.basic_qos(prefetch_count=1)
+    channel.basic_qos(prefetch_count=prefetch_count)
     on_message_callback = functools.partial(callback, connection=connection)
     channel.basic_consume(
         queue=queue_name,
@@ -294,6 +325,7 @@ if __name__ == "__main__":
         "postgresql://user:password@localhost/mydatabase"
     )
     storage_dir = os.environ.get("STORAGE_DIR", "/crs")
+    prefetch_count = int(os.environ.get("PREFETCH_COUNT", 8))
 
     # Optional: Print configurations for debugging purposes
     print("Configuration:")
@@ -301,11 +333,13 @@ if __name__ == "__main__":
     print(f"  Queue Name: {queue_name}")
     print(f"  Database URL: {database_url}")
     print(f"  Storage Directory: {storage_dir}")
+    print(f"  Prefetch count: {prefetch_count}")
 
     # Start listening for tasks with the given args
     listen_for_tasks(
         rabbitmq_host=rabbitmq_host,
         queue_name=queue_name,
         database_url=database_url,
-        storage_dir=storage_dir
+        storage_dir=storage_dir,
+        prefetch_count=prefetch_count
     )

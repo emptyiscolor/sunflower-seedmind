@@ -167,12 +167,6 @@ def compile_project(fuzz_tooling, project_name, project_config, src_path):
             raise FileNotFoundError(f"Local source path {os.path.abspath(src_path)} doesn't exist")
         src_path = os.path.abspath(src_path)
 
-    cache_dir = os.path.join(".tmp", "cache", project_name)
-    os.makedirs(cache_dir, exist_ok=True)
-
-    cache_dir = os.path.abspath(cache_dir)
-    print(f"[+] Project directory: {cache_dir}")
-
     build_command = [
         f"{fuzz_tooling}/infra/helper.py",
         "build_image",
@@ -271,7 +265,7 @@ def compile_project(fuzz_tooling, project_name, project_config, src_path):
     return image_name, find_fuzzers(os.path.join(fuzz_tooling, "build/out", project_name))
 
 
-# Run the project. All artifacts will be stored in .tmp/<project_name>/<runtime_id>/
+# Run the project. All artifacts will be stored in .tmp/<project_name>
 def run_project(project_dir, fuzz_tooling, image_name, project_name, src_path) -> tuple[str, str]:
     # Run the Docker container with the project image
     # Mount the `out` and `shared` directories to the temporary directory
@@ -398,14 +392,12 @@ def run_mini_mode(
     database_url="",
     storage_dir=""
 ):
-    artifacts_dir = os.path.abspath(os.path.join(".tmp", "seedmini", project_name))
-    os.makedirs(artifacts_dir, exist_ok=True)
+    if task:
+        project_dir = os.path.abspath(os.path.join(".tmp", "tasks", task.task_id, "seedmini", project_name))
+    else:
+        project_dir = os.path.abspath(os.path.join(".tmp", "seedmini", project_name))
+    os.makedirs(project_dir, exist_ok=True)
 
-    # Determine the runtime id. We get the largest number and increment it.
-    runtime_ids = [int(d) for d in os.listdir(artifacts_dir) if d.isdigit()]
-    runtime_id = max(runtime_ids) + 1 if runtime_ids else 0
-
-    project_dir = os.path.join(artifacts_dir, str(runtime_id))
     oss_fuzz_project_dir = os.path.join(fuzz_tooling, "projects", project_name)
     is_java = project_config["language"] in ["jvm", "java"]
 
@@ -419,6 +411,16 @@ def run_mini_mode(
             return
         print(f"[*] Running SeedMini for harness {harness_binary}")
         fuzzer_dir = os.path.join(project_dir, harness_binary)
+        if os.path.exists(fuzzer_dir):
+            done_file = os.path.join(fuzzer_dir, "done.txt")
+            if os.path.exists(done_file):
+                print(f"[*] Harness {harness_binary} already processed (done.txt exists). Skipping.")
+                return
+            else:
+                print(f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
+                shutil.rmtree(fuzzer_dir)
+        os.makedirs(fuzzer_dir, exist_ok=True)
+
         agent = SeedMiniAgent(fuzzer_dir, project_name, harness_binary, fuzzers[harness_binary])
         agent.run()
 
@@ -432,17 +434,24 @@ def run_mini_mode(
                 "seedmini"
             )
             print(f"[*] SeedMini: Seeds stored in DB for task {task.task_id} for harness {harness_binary}")
+            with open(os.path.join(fuzzer_dir, "done.txt"), "w") as f:
+                f.write(f"SeedMini: Seeds stored in DB for task {task.task_id} for harness {harness_binary}")
 
     # Create a thread pool to parallelize the SeedMini execution per harness
     with ThreadPoolExecutor(max_workers=len(harness_binaries) or None) as executor:
         futures = [executor.submit(process_harness, hb) for hb in harness_binaries]
 
         # Wait for all tasks to complete and handle any exceptions
+        errors = []
         for future in as_completed(futures):
             try:
                 future.result()
             except Exception as exc:
                 print(f"[!] A harness generated an exception: {exc}")
+                errors.append(exc)
+        if errors:
+            raise Exception("One or more harnesses failed")
+        print("[*] SeedMini successfully executed on all harnesses")
 
 
 def run_full_mode(
@@ -463,25 +472,20 @@ def run_full_mode(
     
     # Compile the project
     image_name, fuzzers = compile_project(fuzz_tooling, project_name, project_config, src_path)
-    
-    artifacts_dir = os.path.abspath(os.path.join(".tmp", "seedgen", project_name))
-    os.makedirs(artifacts_dir, exist_ok=True)
-
-    # determine the runtime id. We get the largest number and plus one
-    runtime_ids = [int(d) for d in os.listdir(artifacts_dir) if d.isdigit()]
-    runtime_id = max(runtime_ids) + 1 if runtime_ids else 0
-
-    project_dir = os.path.join(artifacts_dir, str(runtime_id))
+    if task:
+        project_dir = os.path.abspath(os.path.join(".tmp", "tasks", task.task_id, "seedgen", project_name))
+    else:
+        project_dir = os.path.abspath(os.path.join(".tmp", "seedgen", project_name))
     os.makedirs(project_dir, exist_ok=True)
 
-    # copy files from <fuzz_tooling>/build/out/<project_name> to .tmp/<project_name>/<runtime_id>
-    shutil.copytree(os.path.join(fuzz_tooling, "build/out", project_name), os.path.join(project_dir, "out"))
-    shutil.copytree(os.path.join(fuzz_tooling, "build/work", project_name), os.path.join(project_dir, "work"))
+    # copy files from <fuzz_tooling>/build/out/<project_name> to .tmp/<project_name>
+    shutil.copytree(os.path.join(fuzz_tooling, "build/out", project_name), os.path.join(project_dir, "out"), dirs_exist_ok=True)
+    shutil.copytree(os.path.join(fuzz_tooling, "build/work", project_name), os.path.join(project_dir, "work"), dirs_exist_ok=True)
     if not os.path.exists(os.path.join(project_dir, "out")):
         raise FileNotFoundError(f"Project '{project_name}' not compiled")
 
     # create a "shared" folder in project_dir
-    os.makedirs(os.path.join(project_dir, "shared"))
+    os.makedirs(os.path.join(project_dir, "shared"), exist_ok=True)
 
     print(f"[*] Running seedgen on all fuzzers: {fuzzers}")
     harness_binaries = fuzzers
@@ -490,22 +494,41 @@ def run_full_mode(
         if harness_binary not in fuzzers:
             return
         print(f"[*] Running Seedgen for harness {harness_binary}")
-        # Start the daemon
-        container_id = run_project(
-            project_dir, fuzz_tooling, image_name, project_name, src_path)
-        fuzzer_dir = os.path.join(project_dir, harness_binary)
-        os.makedirs(fuzzer_dir, exist_ok=True)
-        shutil.copytree(os.path.join(project_dir, "out"), os.path.join(fuzzer_dir, "out"))
-        shutil.copytree(os.path.join(project_dir, "work"), os.path.join(fuzzer_dir, "work"))
-        # get ip address of the seedd container, the container id is container_id
-        ip_addr = subprocess.check_output(
-            ["docker", "inspect", "-f", "{{.NetworkSettings.IPAddress}}", container_id]).decode().strip()
-        agent = SeedGenAgent(fuzzer_dir, ip_addr,
-                             project_name, harness_binary)
-        agent.run()
+        try:
+            # Start the daemon
+            container_id = run_project(
+                project_dir, fuzz_tooling, image_name, project_name, src_path)
+            fuzzer_dir = os.path.join(project_dir, harness_binary)
+            if os.path.exists(fuzzer_dir):
+                done_file = os.path.join(fuzzer_dir, "done.txt")
+                if os.path.exists(done_file):
+                    print(f"[*] Harness {harness_binary} already processed (done.txt exists). Skipping.")
+                    return
+                else:
+                    print(f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
+                    shutil.rmtree(fuzzer_dir)
+            os.makedirs(fuzzer_dir, exist_ok=True)
 
-        print(f"[-] Stopping container {container_id}")
-        subprocess.run(["docker", "stop", container_id], check=True)
+            shutil.copytree(os.path.join(project_dir, "out"), os.path.join(fuzzer_dir, "out"), dirs_exist_ok=True)
+            shutil.copytree(os.path.join(project_dir, "work"), os.path.join(fuzzer_dir, "work"), dirs_exist_ok=True)
+            # get ip address of the seedd container, the container id is container_id
+            ip_addr = subprocess.check_output(
+                ["docker", "inspect", "-f", "{{.NetworkSettings.IPAddress}}", container_id]).decode().strip()
+            agent = SeedGenAgent(fuzzer_dir, ip_addr,
+                                project_name, harness_binary)
+            agent.run()
+        except Exception as e:
+            print("Error occurred during full mode:", e)
+            if "container_id" in locals():
+                print(f"[-] Stopping container {container_id}")
+                subprocess.run(["docker", "stop", container_id], check=True)
+                subprocess.run(["docker", "rm", container_id], check=True)
+            raise
+        finally:
+            if "container_id" in locals():
+                print(f"[-] Stopping container {container_id}")
+                subprocess.run(["docker", "stop", container_id], check=True)
+                subprocess.run(["docker", "rm", container_id], check=True)
 
         if save_result_func:
             save_result_func(
@@ -517,17 +540,24 @@ def run_full_mode(
                 "seedgen"
             )
             print(f"[*] Seedgen: Seeds stored in DB for task {task.task_id} for harness {harness_binary}")
+            with open(os.path.join(fuzzer_dir, "done.txt"), "w") as f:
+                f.write(f"Seedgen: Seeds stored in DB for task {task.task_id} for harness {harness_binary}")
 
     # Create a thread pool to parallelize the Seedgen execution per harness
     with ThreadPoolExecutor(max_workers=len(harness_binaries) or None) as executor:
         futures = [executor.submit(process_harness, hb) for hb in harness_binaries]
 
         # Wait for all tasks to complete and handle any exceptions
+        errors = []
         for future in as_completed(futures):
             try:
                 future.result()
             except Exception as exc:
                 print(f"[!] A harness generated an exception: {exc}")
+                errors.append(exc)
+        if errors:
+            raise Exception("One or more harnesses failed")
+        print("[*] Seedgen Full mode successfully executed on all harnesses")
 
 
 def main():
