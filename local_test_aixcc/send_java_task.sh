@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./rabbitmqadmin     --host=localhost --port=15672     --username=guest --password=guest     publish exchange=amq.default routing_key=seedgen_queue     payload='{"focus":"buggy-exemplar-challenge-jvm-jedis","fuzzing_tooling":"/workspaces/sunflower/local_test_aixcc/jedis/jedis_tooling.tar.gz","project_name":"jedis","repo":["/workspaces/sunflower/local_test_aixcc/jedis/jedis_src.tar.gz"],"task_id":"f6dfe86d-0edd-4de5-98f2-b315bd723a0b","task_type":"full"}'

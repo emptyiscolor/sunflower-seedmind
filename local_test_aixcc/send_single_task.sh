@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./rabbitmqadmin     --host=localhost --port=15672     --username=guest --password=guest     publish exchange=amq.default routing_key=seedgen_queue     payload='{"focus":"example-libpng","diff":"/workspaces/sunflower/local_test_aixcc/libpng/libpng_diff.tar.gz","fuzzing_tooling":"/workspaces/sunflower/local_test_aixcc/libpng/libpng_tooling.tar.gz","project_name":"libpng","repo":["/workspaces/sunflower/local_test_aixcc/libpng/libpng_src.tar.gz"],"task_id":"51f81839-7dab-4295-b05b-d67ecdbe35c7","task_type":"delta"}'

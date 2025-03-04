@@ -1,9 +1,9 @@
 from typing import Any
-from seedgen2.utils.singleton import singleton
+from seedgen2.utils.singleton import tls_singleton
 import os
 import networkx as nx
 
-@singleton
+@tls_singleton
 class Tracker:
     def __init__(self):
         self.log_id = 0
