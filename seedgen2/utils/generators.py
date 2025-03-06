@@ -3,6 +3,7 @@
 
 import os
 import subprocess
+import uuid
 from seedgen2.utils.singleton import tls_singleton
 from dataclasses import dataclass
 from typing import List, Optional
@@ -90,7 +91,7 @@ done
 
         # Prepare the list of expected seed paths
         seed_paths = [
-            os.path.join(seeds_dir, f"seed_{generator_id}_{i}")
+            os.path.join(seeds_dir, f"seed_{generator_id}_{uuid.uuid4()}")
             for i in range(self.num_seeds)
         ]
 
