@@ -91,7 +91,7 @@ done
 
         # Prepare the list of expected seed paths
         seed_paths = [
-            os.path.join(seeds_dir, f"seed_{generator_id}_{uuid.uuid4()}")
+            os.path.join(seeds_dir, f"seed_{generator_id}_{i}")
             for i in range(self.num_seeds)
         ]
 
@@ -118,5 +118,18 @@ done
                     missing_files}",
                 None
             )
+        
+        # Rename seed files with random unique suffix to prevent name collision
+        new_seed_paths = [
+            os.path.join(seeds_dir, f"seed_{generator_id}_{uuid.uuid4()}")
+            for i in range(self.num_seeds)
+        ]
 
-        return GeneratorRunResult(True, None, seed_paths)
+        for old_file, new_file in zip(seed_paths, new_seed_paths):
+            try:
+                os.rename(old_file, new_file)
+            except Exception as e:
+                return GeneratorRunResult(False, f"Failed to rename seed {old_file} to {new_file}: {e}", None)
+
+
+        return GeneratorRunResult(True, None, new_seed_paths)
