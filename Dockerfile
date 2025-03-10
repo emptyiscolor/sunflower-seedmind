@@ -94,19 +94,20 @@ RUN apt-get update && apt-get -y install \
     && rm -rf /var/lib/{apt,dpkg,cache,log}
 
 WORKDIR /app
+RUN mkdir infra
 COPY ./seedgen2 ./seedgen2
-COPY ./aixcc.py ./aixcc.py
+COPY ./infra ./infra
 COPY ./utils ./utils
 COPY ./task_handler.py ./task_handler.py
 COPY ./requirements.txt ./requirements.txt
 
-RUN mkdir prebuilt
-COPY --from=builder_callgraph /app/runtime/target/release/libcallgraph_rt.a ./prebuilt/libcallgraph_rt.a
-COPY --from=builder_llvm_pass /app/llvm/SeedMindCFPass.so ./prebuilt/SeedMindCFPass.so
-COPY --from=builder_argus /app/argus/target/release/argus ./prebuilt/argus
-COPY --from=builder_bandld /app/bandld/target/release/bandld ./prebuilt/bandld
-COPY --from=builder_getcov /app/getcov/target/release/getcov ./prebuilt/getcov
-COPY --from=builder_seedd /app/seedd/bin/seedd ./prebuilt/seedd
+RUN mkdir -p infra/prebuilt
+COPY --from=builder_callgraph /app/runtime/target/release/libcallgraph_rt.a ./infra/prebuilt/libcallgraph_rt.a
+COPY --from=builder_llvm_pass /app/llvm/SeedMindCFPass.so ./infra/prebuilt/SeedMindCFPass.so
+COPY --from=builder_argus /app/argus/target/release/argus ./infra/prebuilt/argus
+COPY --from=builder_bandld /app/bandld/target/release/bandld ./infra/prebuilt/bandld
+COPY --from=builder_getcov /app/getcov/target/release/getcov ./infra/prebuilt/getcov
+COPY --from=builder_seedd /app/seedd/bin/seedd ./infra/prebuilt/seedd
 
 RUN pip3 install -r requirements.txt --break-system-packages
 

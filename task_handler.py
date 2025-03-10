@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pika
 
-from aixcc import (
+from infra.aixcc import (
     validate_environment,
     load_project_config,
     print_project_info,
