@@ -320,7 +320,7 @@ if __name__ == "__main__":
         "redis://localhost:6379"
     )
     otel_endpoint = os.getenv(
-        "OTEL_COLLECTOR_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
         "http://localhost:4317"
     )
     storage_dir = os.environ.get("STORAGE_DIR", "/crs")

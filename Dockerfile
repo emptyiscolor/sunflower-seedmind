@@ -96,7 +96,7 @@ RUN apt-get update && apt-get -y install \
 WORKDIR /app
 COPY ./seedgen2 ./seedgen2
 COPY ./aixcc.py ./aixcc.py
-COPY ./db.py ./db.py
+COPY ./utils ./utils
 COPY ./task_handler.py ./task_handler.py
 COPY ./requirements.txt ./requirements.txt
 
