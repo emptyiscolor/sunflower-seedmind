@@ -12,17 +12,17 @@ build:
 
 # Create the prebuilt directory and copy artifacts from the container
 copy:
-	mkdir -p prebuilt
+	mkdir -p infra/prebuilt
 	# Run a temporary container to copy files
 	docker run --name temp-container $(IMAGE_NAME) /bin/true
 	# Copy the artifacts from the container to the host
-	docker cp temp-container:/prebuilt/. prebuilt/
+	docker cp temp-container:/prebuilt/. infra/prebuilt/
 	# Remove the temporary container
 	docker rm temp-container
 
 # Clean up the prebuilt directory
 clean:
-	rm -rf prebuilt
+	rm -rf infra/prebuilt
 
 proto:
 	protoc -I. --go_out=. seedd.proto
