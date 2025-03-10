@@ -18,7 +18,8 @@ class BaseModel:
         self.model = ChatOpenAI(
             model=model_name,
             base_url=os.getenv("LITELLM_BASE_URL"),
-            api_key=SecretStr(os.getenv("LITELLM_KEY"))
+            api_key=SecretStr(os.getenv("LITELLM_KEY")),
+            include_response_headers=True
         )
         # Initialize json_model based on model capabilities
         self.json_model = (

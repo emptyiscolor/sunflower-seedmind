@@ -21,19 +21,10 @@ from aixcc import (
     run_mini_mode,
     run_full_mode
 )
-
-import db
-
-
-@dataclass
-class TaskData:
-    task_id: int
-    task_type: str
-    project_name: str
-    focus: str
-    repo: List[str]         # A list of URLs to .tar.gz files
-    fuzz_tooling: str       # A URL to a .tar.gz file
-    diff: str               # Another URL to a .tar.gz file
+from utils.task import TaskData
+from utils.telemetry import init_opentelemetry
+from utils.redis import init_redis
+import utils.db as db
 
 
 def extract_from_storage(tar_path: str, dest_dir: str) -> str:
@@ -64,7 +55,7 @@ def extract_from_storage(tar_path: str, dest_dir: str) -> str:
 def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str):
     """
     Given a TaskData, extract the repos, fuzzing_tooling, diff archives
-    into a .tmp/tasks/<task_id> folder and run build_and_run_targets.
+    into a .tmp/tasks/<task_id> folder and run SeedGen & SeedMini pipelines.
     """
     # Create a directory for this task
     task_dir = os.path.abspath(os.path.join(".tmp", "tasks", str(task.task_id)))
@@ -324,6 +315,14 @@ if __name__ == "__main__":
         "DATABASE_URL",
         "postgresql://user:password@localhost/mydatabase"
     )
+    redis_url = os.environ.get(
+        "REDIS_URL",
+        "redis://localhost:6379"
+    )
+    otel_endpoint = os.getenv(
+        "OTEL_COLLECTOR_ENDPOINT",
+        "http://localhost:4317"
+    )
     storage_dir = os.environ.get("STORAGE_DIR", "/crs")
     prefetch_count = int(os.environ.get("PREFETCH_COUNT", 8))
 
@@ -332,8 +331,13 @@ if __name__ == "__main__":
     print(f"  RabbitMQ Host: {rabbitmq_host}")
     print(f"  Queue Name: {queue_name}")
     print(f"  Database URL: {database_url}")
+    print(f"  Redis URL: {redis_url}")
+    print(f"  OTEL endpoint: {otel_endpoint}")
     print(f"  Storage Directory: {storage_dir}")
     print(f"  Prefetch count: {prefetch_count}")
+
+    init_redis(redis_url)
+    init_opentelemetry(otel_endpoint, "seedgen")
 
     # Start listening for tasks with the given args
     listen_for_tasks(

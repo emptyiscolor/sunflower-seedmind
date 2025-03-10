@@ -17,6 +17,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from seedgen2.seedgen import SeedGenAgent
 from seedgen2.seedmini import SeedMiniAgent
 
+from utils.task import TaskData
+from utils.redis import get_redis_client
+from utils.telemetry import log_seedgen
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -367,7 +371,7 @@ def find_files_with_fuzzer_function(src_path, oss_fuzz_project_dir, is_java):
     return result
 
 
-def build_and_run_targets(project_name, harness_binaries, src_path, fuzz_tooling, all=False, mini=False):
+def build_and_run_targets(project_name, src_path, fuzz_tooling, mini=False):
     os.makedirs(".tmp", exist_ok=True)
 
     project_yaml_path = validate_environment(fuzz_tooling, project_name)
@@ -376,10 +380,20 @@ def build_and_run_targets(project_name, harness_binaries, src_path, fuzz_tooling
 
     is_java = project_config["language"] in ["jvm", "java"]
 
+    mock_task = TaskData(
+        task_id="test-1234-5678",
+        task_type="delta",
+        project_name=project_name,
+        focus="",
+        repo=[],
+        fuzz_tooling="",
+        diff=""
+    )
+
     if is_java or mini:
-        run_mini_mode(project_name, project_config, src_path, fuzz_tooling)
+        run_mini_mode(project_name, project_config, src_path, fuzz_tooling, task=mock_task)
     else:
-        run_full_mode(project_name, project_config, src_path, fuzz_tooling)
+        run_full_mode(project_name, project_config, src_path, fuzz_tooling, task=mock_task)
 
 
 def run_mini_mode(
@@ -392,10 +406,7 @@ def run_mini_mode(
     database_url="",
     storage_dir=""
 ):
-    if task:
-        project_dir = os.path.abspath(os.path.join(".tmp", "tasks", task.task_id, "seedmini", project_name))
-    else:
-        project_dir = os.path.abspath(os.path.join(".tmp", "seedmini", project_name))
+    project_dir = os.path.abspath(os.path.join(".tmp", "tasks", task.task_id, "seedmini", project_name))
     os.makedirs(project_dir, exist_ok=True)
 
     oss_fuzz_project_dir = os.path.join(fuzz_tooling, "projects", project_name)
@@ -403,26 +414,35 @@ def run_mini_mode(
 
     fuzzers = find_files_with_fuzzer_function(src_path, oss_fuzz_project_dir, is_java)
 
-    print(f"[*] Running SeedMini on all fuzzers: {list(fuzzers.keys())}")
     harness_binaries = list(fuzzers.keys())
+    print(f"[*] Running SeedMini on all fuzzers: {harness_binaries}")
 
     def process_harness(harness_binary):
         if harness_binary not in fuzzers:
             return
         print(f"[*] Running SeedMini for harness {harness_binary}")
+        log_seedgen(task.task_id, "seedmini_started", target=task.project_name, harness_name=harness_binary)
+
+        redis_client = get_redis_client()
         fuzzer_dir = os.path.join(project_dir, harness_binary)
         if os.path.exists(fuzzer_dir):
-            done_file = os.path.join(fuzzer_dir, "done.txt")
-            if os.path.exists(done_file):
-                print(f"[*] Harness {harness_binary} already processed (done.txt exists). Skipping.")
-                return
+            if redis_client:
+                is_done = redis_client.get(f"seedmini:{task.task_id}:{harness_binary}")
+                if is_done == b"done":
+                    print(f"[*] Harness {harness_binary} already processed. Skipping.")
+                    log_seedgen(task.task_id, "seedmini_skipped_already_processed_harness", target=task.project_name, harness_name=harness_binary)
+                    return
+                else:
+                    print(f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
+                    log_seedgen(task.task_id, "seedmini_started_reprocessing_incomplete_harness", target=task.project_name, harness_name=harness_binary)
+                    shutil.rmtree(fuzzer_dir)
             else:
-                print(f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
                 shutil.rmtree(fuzzer_dir)
         os.makedirs(fuzzer_dir, exist_ok=True)
 
         agent = SeedMiniAgent(fuzzer_dir, project_name, harness_binary, fuzzers[harness_binary])
         agent.run()
+        log_seedgen(task.task_id, "seedmini_processed_harness", target=task.project_name, harness_name=harness_binary)
 
         if save_result_func:
             save_result_func(
@@ -434,8 +454,9 @@ def run_mini_mode(
                 "seedmini"
             )
             print(f"[*] SeedMini: Seeds stored in DB for task {task.task_id} for harness {harness_binary}")
-            with open(os.path.join(fuzzer_dir, "done.txt"), "w") as f:
-                f.write(f"SeedMini: Seeds stored in DB for task {task.task_id} for harness {harness_binary}")
+            log_seedgen(task.task_id, "seedmini_stored_to_db", target=task.project_name, harness_name=harness_binary)
+            if redis_client:
+                redis_client.set(f"seedmini:{task.task_id}:{harness_binary}", "done")
 
     # Create a thread pool to parallelize the SeedMini execution per harness
     with ThreadPoolExecutor(max_workers=len(harness_binaries) or None) as executor:
@@ -448,10 +469,12 @@ def run_mini_mode(
                 future.result()
             except Exception as exc:
                 print(f"[!] A harness generated an exception: {exc}")
+                log_seedgen(task.task_id, "seedmini_harness_failed", target=task.project_name)
                 errors.append(exc)
         if errors:
             raise Exception("One or more harnesses failed")
         print("[*] SeedMini successfully executed on all harnesses")
+        log_seedgen(task.task_id, "seedmini_finished", target=task.project_name)
 
 
 def run_full_mode(
@@ -472,10 +495,9 @@ def run_full_mode(
     
     # Compile the project
     image_name, fuzzers = compile_project(fuzz_tooling, project_name, project_config, src_path)
-    if task:
-        project_dir = os.path.abspath(os.path.join(".tmp", "tasks", task.task_id, "seedgen", project_name))
-    else:
-        project_dir = os.path.abspath(os.path.join(".tmp", "seedgen", project_name))
+    log_seedgen(task.task_id, "seedgen_full_built_target", target=task.project_name)
+
+    project_dir = os.path.abspath(os.path.join(".tmp", "tasks", task.task_id, "seedgen", project_name))
     os.makedirs(project_dir, exist_ok=True)
 
     # copy files from <fuzz_tooling>/build/out/<project_name> to .tmp/<project_name>
@@ -494,18 +516,25 @@ def run_full_mode(
         if harness_binary not in fuzzers:
             return
         print(f"[*] Running Seedgen for harness {harness_binary}")
+        log_seedgen(task.task_id, "seedgen_full_started", target=task.project_name, harness_name=harness_binary)
         try:
             # Start the daemon
             container_id = run_project(
                 project_dir, fuzz_tooling, image_name, project_name, src_path)
+            redis_client = get_redis_client()
             fuzzer_dir = os.path.join(project_dir, harness_binary)
             if os.path.exists(fuzzer_dir):
-                done_file = os.path.join(fuzzer_dir, "done.txt")
-                if os.path.exists(done_file):
-                    print(f"[*] Harness {harness_binary} already processed (done.txt exists). Skipping.")
-                    return
+                if redis_client:
+                    is_done = redis_client.get(f"seedgen:{task.task_id}:{harness_binary}")
+                    if is_done == b"done":
+                        print(f"[*] Harness {harness_binary} already processed. Skipping.")
+                        log_seedgen(task.task_id, "seedgen_full_skipped_already_processed_harness", target=task.project_name, harness_name=harness_binary)
+                        return
+                    else:
+                        print(f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
+                        log_seedgen(task.task_id, "seedgen_full_started_reprocessing_incomplete_harness", target=task.project_name, harness_name=harness_binary)
+                        shutil.rmtree(fuzzer_dir)
                 else:
-                    print(f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
                     shutil.rmtree(fuzzer_dir)
             os.makedirs(fuzzer_dir, exist_ok=True)
 
@@ -530,6 +559,8 @@ def run_full_mode(
                 subprocess.run(["docker", "stop", container_id], check=True)
                 subprocess.run(["docker", "rm", container_id], check=True)
 
+        log_seedgen(task.task_id, "seedgen_full_processed_harness", target=task.project_name, harness_name=harness_binary)
+
         if save_result_func:
             save_result_func(
                 database_url,
@@ -540,8 +571,9 @@ def run_full_mode(
                 "seedgen"
             )
             print(f"[*] Seedgen: Seeds stored in DB for task {task.task_id} for harness {harness_binary}")
-            with open(os.path.join(fuzzer_dir, "done.txt"), "w") as f:
-                f.write(f"Seedgen: Seeds stored in DB for task {task.task_id} for harness {harness_binary}")
+            log_seedgen(task.task_id, "seedgen_full_stored_to_db", target=task.project_name, harness_name=harness_binary)
+            if redis_client:
+                redis_client.set(f"seedgen:{task.task_id}:{harness_binary}", "done")
 
     # Create a thread pool to parallelize the Seedgen execution per harness
     with ThreadPoolExecutor(max_workers=len(harness_binaries) or None) as executor:
@@ -554,10 +586,12 @@ def run_full_mode(
                 future.result()
             except Exception as exc:
                 print(f"[!] A harness generated an exception: {exc}")
+                log_seedgen(task.task_id, "seedgen_full_harness_failed", target=task.project_name)
                 errors.append(exc)
         if errors:
             raise Exception("One or more harnesses failed")
         print("[*] Seedgen Full mode successfully executed on all harnesses")
+        log_seedgen(task.task_id, "seedgen_full_finished", target=task.project_name)
 
 
 def main():
