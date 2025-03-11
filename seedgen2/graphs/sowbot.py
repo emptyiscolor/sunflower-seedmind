@@ -16,6 +16,7 @@ from seedgen2.utils.generators import GeneratorRunResult, SeedGeneratorStore
 from seedgen2.utils.seeds import SeedFeedback, run_seeds
 from seedgen2.utils.tracker import Tracker
 
+import re
 
 class SowbotPrompts:
     REQUIREMENTS_PROMPT = """
@@ -101,13 +102,8 @@ class ScriptExtractor:
 
     @staticmethod
     def extract_script(content: str) -> Optional[str]:
-        start = content.find("```python")
-        end = content.find("```", start + 1)
-
-        if start == -1 or end == -1:
-            return None
-
-        return content[start + len("```python\n"): end].strip()
+        match = re.search(r"```python\n(.*)```", content, re.DOTALL)
+        return match.group(1).strip() if match else None
 
 
 class GenerationNode:
