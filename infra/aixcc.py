@@ -1,12 +1,5 @@
-#!/usr/bin/env python
-# aixcc.py
-# Run SeedGen on an AIxCC generated oss-fuzz project and tooling
-# Usage: python3 aixcc.py <project_name> <path_to_fuzz_tooling> <path_to_src_dir> <harness_binary> [--all]
-
 import itertools
 import os
-import sys
-import argparse
 import yaml
 import subprocess
 import shutil
@@ -17,32 +10,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from seedgen2.seedgen import SeedGenAgent
 from seedgen2.seedmini import SeedMiniAgent
 
-from utils.task import TaskData
 from utils.redis import get_redis_client
 from utils.telemetry import log_seedgen
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Run SeedGen on an OSS-Fuzz project")
-    parser.add_argument("project_name", type=str,
-                        help="Name of the OSS-Fuzz project")
-    parser.add_argument(
-        "fuzz_tooling",
-        type=str,
-        help="Path to the fuzz tooling directory (oss-fuzz)",
-    )
-    parser.add_argument(
-        "src_path",
-        type=str,
-        help="Path to the local project source directory",
-    )
-    parser.add_argument(
-        "--mini",
-        action="store_true",
-        help="Run seedgen in mini mode",
-    )
-    return parser.parse_args()
 
 
 def validate_environment(root, project_name):
@@ -360,31 +329,6 @@ def find_files_with_fuzzer_function(src_path, oss_fuzz_project_dir, is_java):
     return result
 
 
-def build_and_run_targets(project_name, src_path, fuzz_tooling, mini=False):
-    os.makedirs(".tmp", exist_ok=True)
-
-    project_yaml_path = validate_environment(fuzz_tooling, project_name)
-    project_config = load_project_config(project_yaml_path)
-    print_project_info(project_name, project_config)
-
-    is_java = project_config["language"] in ["jvm", "java"]
-
-    mock_task = TaskData(
-        task_id="test-1234-5678",
-        task_type="delta",
-        project_name=project_name,
-        focus="",
-        repo=[],
-        fuzz_tooling="",
-        diff=""
-    )
-
-    if is_java or mini:
-        run_mini_mode(project_name, project_config, src_path, fuzz_tooling, task=mock_task)
-    else:
-        run_full_mode(project_name, project_config, src_path, fuzz_tooling, task=mock_task)
-
-
 def run_mini_mode(
     project_name,
     project_config,
@@ -581,17 +525,3 @@ def run_full_mode(
             raise Exception("One or more harnesses failed")
         print("[*] Seedgen Full mode successfully executed on all harnesses")
         log_seedgen(task.task_id, "seedgen_full_finished", target=task.project_name)
-
-
-def main():
-    args = parse_args()
-    project_name = args.project_name
-    src_path = args.src_path
-    fuzz_tooling = args.fuzz_tooling
-    mini = args.mini
-
-    build_and_run_targets(project_name, src_path, fuzz_tooling, mini)
-
-
-if __name__ == "__main__":
-    main()
