@@ -38,17 +38,6 @@ def parse_args():
         help="Path to the local project source directory",
     )
     parser.add_argument(
-        "harness_binaries",
-        type=str,
-        nargs="*",
-        help="Name of the fuzz target binaries. These binaries should be present in the `out` directory of the OSS-Fuzz project",
-    )
-    parser.add_argument(
-        "--all",
-        action="store_true",
-        help="Run seedgen on all fuzz target binaries",
-    )
-    parser.add_argument(
         "--mini",
         action="store_true",
         help="Run seedgen in mini mode",
@@ -597,13 +586,11 @@ def run_full_mode(
 def main():
     args = parse_args()
     project_name = args.project_name
-    harness_binaries = args.harness_binaries
     src_path = args.src_path
     fuzz_tooling = args.fuzz_tooling
-    all = args.all
     mini = args.mini
 
-    build_and_run_targets(project_name, harness_binaries, src_path, fuzz_tooling, all, mini)
+    build_and_run_targets(project_name, src_path, fuzz_tooling, mini)
 
 
 if __name__ == "__main__":
