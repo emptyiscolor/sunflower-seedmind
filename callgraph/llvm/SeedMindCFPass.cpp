@@ -60,7 +60,8 @@ public:
               callee = callBase->getCalledOperand();
             } else {
               Function *calleeFunc = callBase->getCalledFunction();
-              if (calleeFunc->isIntrinsic() || should_skip(calleeFunc)) {
+              if (calleeFunc == nullptr || callBase->isInlineAsm()
+                  || calleeFunc->isIntrinsic() || should_skip(calleeFunc)) {
                 continue;
               }
               callee = calleeFunc;
