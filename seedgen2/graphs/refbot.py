@@ -51,6 +51,7 @@ class GenerateState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     error_happened: bool
     error_message: str
+    error_count: int
     script: str
 
 
@@ -104,6 +105,11 @@ class ErrorHandlingNode:
     """Handles generation errors and requests corrections."""
 
     def __call__(self, state: GenerateState):
+        current_error_count = state["error_count"]
+
+        if current_error_count >= 5:
+            raise Exception("Too many errors in Refbot, aborting")
+
         logging.info("Starting error correction iteration")
         model = state['model']
         error_prompt = RefbotPrompts.HANDLE_GENERATION_ERROR.format(
@@ -111,7 +117,7 @@ class ErrorHandlingNode:
         messages = [HumanMessage(content=error_prompt)]
         response = model.invoke(state["messages"] + messages)
 
-        return {"messages": messages + [response]}
+        return {"messages": messages + [response], "error_count": current_error_count + 1}
 
 
 def EDGE_error_happened(state: GenerateState) -> bool:
@@ -160,6 +166,7 @@ class Refbot:
             messages=[],
             error_happened=False,
             error_message="",
+            error_count=0,
             script=""
         )
         result = graph.invoke(initial_state)
