@@ -427,7 +427,13 @@ def run_full_mode(
         return
     
     # Compile the project
-    image_name, fuzzers = compile_project(fuzz_tooling, project_name, project_config, src_path)
+    try:
+        image_name, fuzzers = compile_project(fuzz_tooling, project_name, project_config, src_path)
+    except Exception as e:
+        print(f"[!] Error occurred when building {project_name}:", e)
+        log_seedgen(task.task_id, "seedgen_full_build_failed", target=task.project_name)
+        raise
+
     log_seedgen(task.task_id, "seedgen_full_built_target", target=task.project_name)
 
     project_dir = os.path.abspath(os.path.join(".tmp", "tasks", task.task_id, "seedgen", project_name))
