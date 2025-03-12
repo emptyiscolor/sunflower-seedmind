@@ -13,6 +13,8 @@ from langgraph.graph.message import add_messages
 from seedgen2.presets import SeedGen2KnowledgeableModel, SeedGen2GenerativeModel
 from seedgen2.utils.grpc import SeedD
 
+import re
+
 
 class RefbotPrompts:
     REFERENCE_REQUIREMENTS_PROMPT = """
@@ -57,13 +59,8 @@ class ScriptExtractor:
 
     @staticmethod
     def extract_script(content: str) -> Optional[str]:
-        start = content.find("```python")
-        end = content.find("```", start + 1)
-
-        if start == -1 or end == -1:
-            return None
-
-        return content[start + len("```python\n"): end].strip()
+        match = re.search(r"```python\n(.*)```", content, re.DOTALL)
+        return match.group(1).strip() if match else None
 
 
 class GenerationNode:
