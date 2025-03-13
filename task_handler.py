@@ -42,6 +42,15 @@ def extract_from_storage(tar_path: str, dest_dir: str) -> str:
             if root:  # Make sure it's not empty
                 top_level_dirs.add(root)
 
+        # Remove existing residual extracted files (in case of a task being requeued)
+        for root in top_level_dirs:
+            existing_path = os.path.join(dest_dir, root)
+            if os.path.exists(existing_path):
+                if os.path.isdir(existing_path):
+                    shutil.rmtree(existing_path)
+                else:
+                    os.remove(existing_path)
+
         # Extract all files
         tar.extractall(path=dest_dir)
 
