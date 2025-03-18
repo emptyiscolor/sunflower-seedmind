@@ -332,6 +332,14 @@ if __name__ == "__main__":
         "OTEL_EXPORTER_OTLP_ENDPOINT",
         "http://localhost:4317"
     )
+    otel_headers = os.getenv(
+        "OTEL_EXPORTER_OTLP_HEADERS",
+        ""
+    )
+    otel_protocol = os.getenv(
+        "OTEL_EXPORTER_OTLP_PROTOCOL",
+        "grpc"
+    )
     storage_dir = os.environ.get("STORAGE_DIR", "/crs")
     prefetch_count = int(os.environ.get("PREFETCH_COUNT", 8))
 
@@ -346,7 +354,7 @@ if __name__ == "__main__":
     print(f"  Prefetch count: {prefetch_count}")
 
     init_redis(redis_url)
-    init_opentelemetry(otel_endpoint, "seedgen")
+    init_opentelemetry(otel_endpoint, otel_headers, otel_protocol, "seedgen")
 
     # Start listening for tasks with the given args
     listen_for_tasks(

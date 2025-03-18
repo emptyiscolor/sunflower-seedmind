@@ -13,13 +13,36 @@ from utils.redis import get_redis_client
 
 tracer = None
 
-def init_opentelemetry(otel_endpoint: str, service_name: str):
+def parse_otlp_headers(headers_str: str) -> dict:
+    headers = {}
+    for pair in headers_str.split(','):
+        if '=' in pair:
+            key, value = pair.split('=', 1)
+            headers[key.strip()] = value.strip()
+    return headers
+
+
+def init_opentelemetry(otel_endpoint: str, otel_headers: str, otel_protocol: str, service_name: str):
     logging.getLogger("opentelemetry").setLevel(logging.WARNING)
     
+    headers = parse_otlp_headers(otel_headers) if otel_headers else None
     resource = Resource(attributes={"service.name": service_name})
     
     tracer_provider = TracerProvider(resource=resource)
-    otlp_exporter = OTLPSpanExporter(endpoint=otel_endpoint)
+
+    if otel_protocol == "grpc":
+        otlp_exporter = OTLPSpanExporter(endpoint=otel_endpoint, headers=headers)
+    elif otel_protocol == "http/protobuf":
+        try:
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPHTTPSpanExporter
+            otlp_exporter = OTLPHTTPSpanExporter(endpoint=otel_endpoint, headers=headers)
+        except ImportError:
+            logging.error("OTLP HTTP exporter is not installed; falling back to gRPC exporter.")
+            otlp_exporter = OTLPSpanExporter(endpoint=otel_endpoint, headers=headers)
+    else:
+        logging.warning("Unsupported OTLP protocol '%s' provided, using gRPC exporter instead.", otel_protocol)
+        otlp_exporter = OTLPSpanExporter(endpoint=otel_endpoint, headers=headers)
+    
     span_processor = BatchSpanProcessor(otlp_exporter)
     tracer_provider.add_span_processor(span_processor)
     trace.set_tracer_provider(tracer_provider)
