@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - dev
+    tags:
+      - '*'  # Trigger on all tag pushes
 
 jobs:
   build-and-push:
@@ -17,7 +19,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: true # Fetch submodules
+          submodules: true
           fetch-depth: 0
 
       - name: Set up Docker Buildx
@@ -33,6 +35,15 @@ jobs:
       - name: Extract repository name
         run: echo "REPO_NAME=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
+      - name: Determine Docker tags
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+          else
+            TAG_NAME=latest
+          fi
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -40,6 +51,6 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ env.REPO_NAME }}:${{ github.sha }}
-            ghcr.io/${{ env.REPO_NAME }}:latest
+            ghcr.io/${{ env.REPO_NAME }}:${{ env.TAG_NAME }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
