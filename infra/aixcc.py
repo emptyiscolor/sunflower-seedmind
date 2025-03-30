@@ -233,6 +233,7 @@ def run_project(project_dir, fuzz_tooling, image_name, project_name, src_path) -
     # Mount the `out` and `shared` directories to the temporary directory
     mount_configs = {
         "/out": f"{project_dir}/out",
+        "/work": f"{project_dir}/work",
         "/shared": f"{project_dir}/shared",
         "/seedd": get_prebuilt_binary_path("seedd"),
         "/getcov": get_prebuilt_binary_path("getcov"),

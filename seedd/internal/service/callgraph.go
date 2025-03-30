@@ -58,7 +58,7 @@ func (s *RunSeedsService) dryRunSeeds(harnessBinary string, seedsPaths []string)
 
 	// set EXPORT_CALLS=1 and run the seeds with harness binary one by one, and collect the call graph
 	os.Setenv("EXPORT_CALLS", "1")
-	args := []string{"--timeout=300"} // 5 minutes
+	args := []string{"-timeout=3"}
 	args = append(args, seedsPaths...)
 	cmd := exec.Command(filepath.Join("/out", harnessBinary), args...)
 	cmd.Dir = artifactDir
