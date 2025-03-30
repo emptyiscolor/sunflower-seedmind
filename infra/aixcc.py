@@ -233,6 +233,7 @@ def run_project(project_dir, fuzz_tooling, image_name, project_name, src_path) -
     # Mount the `out` and `shared` directories to the temporary directory
     mount_configs = {
         "/out": f"{project_dir}/out",
+        "/work": f"{project_dir}/work",
         "/shared": f"{project_dir}/shared",
         "/seedd": get_prebuilt_binary_path("seedd"),
         "/getcov": get_prebuilt_binary_path("getcov"),
@@ -441,7 +442,7 @@ def run_full_mode(
 
     # copy files from <fuzz_tooling>/build/out/<project_name> to .tmp/<project_name>
     shutil.copytree(os.path.join(fuzz_tooling, "build/out", project_name), os.path.join(project_dir, "out"), dirs_exist_ok=True)
-    #shutil.copytree(os.path.join(fuzz_tooling, "build/work", project_name), os.path.join(project_dir, "work"), dirs_exist_ok=True)
+    shutil.copytree(os.path.join(fuzz_tooling, "build/work", project_name), os.path.join(project_dir, "work"), dirs_exist_ok=True)
     if not os.path.exists(os.path.join(project_dir, "out")):
         raise FileNotFoundError(f"Project '{project_name}' not compiled")
 
@@ -478,7 +479,7 @@ def run_full_mode(
             os.makedirs(fuzzer_dir, exist_ok=True)
 
             shutil.copytree(os.path.join(project_dir, "out"), os.path.join(fuzzer_dir, "out"), dirs_exist_ok=True)
-            #shutil.copytree(os.path.join(project_dir, "work"), os.path.join(fuzzer_dir, "work"), dirs_exist_ok=True)
+            shutil.copytree(os.path.join(project_dir, "work"), os.path.join(fuzzer_dir, "work"), dirs_exist_ok=True)
             # get ip address of the seedd container, the container id is container_id
             ip_addr = subprocess.check_output(
                 ["docker", "inspect", "-f", "{{.NetworkSettings.IPAddress}}", container_id]).decode().strip()
