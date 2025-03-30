@@ -57,27 +57,26 @@ func (s *RunSeedsService) dryRunSeeds(harnessBinary string, seedsPaths []string)
 	)
 
 	// set EXPORT_CALLS=1 and run the seeds with harness binary one by one, and collect the call graph
-	for _, seedPath := range seedsPaths {
-		os.Setenv("EXPORT_CALLS", "1")
-		cmd := exec.Command(filepath.Join("/out", harnessBinary), seedPath)
-		cmd.Dir = artifactDir
-		cmd.Run()
+	os.Setenv("EXPORT_CALLS", "1")
+	args := []string{"--timeout=300"} // 5 minutes
+	args = append(args, seedsPaths...)
+	cmd := exec.Command(filepath.Join("/out", harnessBinary), args...)
+	cmd.Dir = artifactDir
+	cmd.Run()
 
-		if _, exists := s.callGraphs[harnessBinary]; !exists {
-			s.callGraphs[harnessBinary] = NewCallGraph()
-		}
-		s.callGraphs[harnessBinary].Update()
+	if _, exists := s.callGraphs[harnessBinary]; !exists {
+		s.callGraphs[harnessBinary] = NewCallGraph()
+	}
+	s.callGraphs[harnessBinary].Update()
 
-		// let's check if LLVMFuzzerTestOneInput is in the call graph
-		if _, exists := s.callGraphs[harnessBinary].nodes["LLVMFuzzerTestOneInput"]; !exists {
-			logger.Warn("LLVMFuzzerTestOneInput not found in call graph",
-				zap.String("harness_binary", harnessBinary),
-				zap.String("seed_path", seedPath),
-			)
-			// copy CallLogFile to /shared/callgraph_{uuid}.log
-			uuid := uuid.New()
-			copyFile(CallLogFile, fmt.Sprintf("/shared/callgraph_%s.log", uuid))
-		}
+	// let's check if LLVMFuzzerTestOneInput is in the call graph
+	if _, exists := s.callGraphs[harnessBinary].nodes["LLVMFuzzerTestOneInput"]; !exists {
+		logger.Warn("LLVMFuzzerTestOneInput not found in call graph",
+			zap.String("harness_binary", harnessBinary),
+		)
+		// copy CallLogFile to /shared/callgraph_{uuid}.log
+		uuid := uuid.New()
+		copyFile(CallLogFile, fmt.Sprintf("/shared/callgraph_%s.log", uuid))
 	}
 
 	logger.Info("Dry run seeds completed",
