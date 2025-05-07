@@ -3,7 +3,7 @@ name: Build and Push to GHCR
 on:
   push:
     branches:
-      - dev
+      - feature/redis-sentinel
     tags:
       - '*'  # Trigger on all tag pushes
 
@@ -40,7 +40,7 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             TAG_NAME=${GITHUB_REF#refs/tags/}
           else
-            TAG_NAME=latest
+            TAG_NAME=beta
           fi
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
 
