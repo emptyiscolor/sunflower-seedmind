@@ -82,13 +82,16 @@ def log_seedgen(
     task_id: str,
     action: str,
     target: str = None,
-    harness_name: str = None
+    harness_name: str = None,
+    gen_model: str = None,
 ):
     extra_attributes = {}
     if target:
         extra_attributes["crs.action.target"] = target
     if harness_name:
         extra_attributes["crs.action.target.harness"] = harness_name
+    if gen_model:
+        extra_attributes["crs.action.model"] = gen_model
 
     try:
         log_action("input_generation", action, get_task_metadata(task_id), extra_attributes)

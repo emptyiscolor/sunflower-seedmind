@@ -61,13 +61,13 @@ def extract_from_storage(tar_path: str, dest_dir: str) -> str:
     return None
 
 
-def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str):
+def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, gen_model: str):
     """
     Given a TaskData, extract the repos, fuzzing_tooling, diff archives
     into a .tmp/tasks/<task_id> folder and run SeedGen & SeedMini pipelines.
     """
     # Create a directory for this task
-    task_dir = os.path.abspath(os.path.join(".tmp", "tasks", str(task.task_id)))
+    task_dir = os.path.abspath(os.path.join(".tmp", "tasks", str(task.task_id), gen_model))
     os.makedirs(task_dir, exist_ok=True)
 
     # Extract repos
@@ -125,6 +125,7 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str):
             project_config,
             os.path.join(task_dir, task.focus),
             os.path.join(task_dir, fuzz_tooling_dir),
+            gen_model,
             save_result_to_db,
             task,
             database_url,
@@ -136,6 +137,7 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str):
             project_config,
             os.path.join(task_dir, task.focus),
             os.path.join(task_dir, fuzz_tooling_dir),
+            gen_model,
             save_result_to_db,
             task,
             database_url,
@@ -160,6 +162,7 @@ def save_result_to_db(
     harness_binary: str,
     seed_dir: str,
     seed_type: str,
+    gen_model: str,
     coverage: float = 0,
     metric: str = ""
 ):
@@ -174,8 +177,9 @@ def save_result_to_db(
         seed_storage_dir = os.path.join(
             storage_dir, seed_type, str(task.task_id))
         os.makedirs(seed_storage_dir, exist_ok=True)
-        seed_tar_gz_path = os.path.join(seed_storage_dir, f"{seed_type}_{
-                                        task.task_id}_{harness_binary}.tar.gz")
+        seed_tar_gz_path = os.path.join(
+            seed_storage_dir,
+            f"{seed_type}_{gen_model.replace(".", "-")}_{task.task_id}_{harness_binary}.tar.gz")
         with tarfile.open(seed_tar_gz_path, "w:gz") as tar:
             tar.add(seed_dir, arcname=".")
 
@@ -203,7 +207,8 @@ def listen_for_tasks(
     queue_name: str,
     database_url: str,
     storage_dir: str,
-    prefetch_count: int
+    prefetch_count: int,
+    gen_model_list: List[str]
 ):
     """
     Connect to RabbitMQ, listen for tasks in JSON format on `queue_name`,
@@ -244,17 +249,37 @@ def listen_for_tasks(
 
             # Start a new thread for processing
             processing_thread = threading.Thread(
-                target=process_task, args=(connection, ch, method, properties, body, task))
+                target=process_task, args=(connection, ch, method, properties, body, task, gen_model_list))
             processing_thread.start()
 
         except Exception as e:
             print(f"[!] Failed to parse task: {e}")
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
-    def process_task(connection, ch, method, properties, body, task):
+    def process_task(connection, ch, method, properties, body, task, gen_model_list):
         try:
-            run_seedgen_for_task(task, database_url, storage_dir)
-            print(f"[*] Seedgen workflow finished for task {task.task_id}")
+            # Use ThreadPoolExecutor to run seedgen for all models in parallel
+            with ThreadPoolExecutor(max_workers=len(gen_model_list)) as executor:
+                futures = []
+                for gen_model in gen_model_list:
+                    future = executor.submit(run_seedgen_for_task, task, database_url, storage_dir, gen_model)
+                    futures.append((future, gen_model))
+                
+                # Wait for all futures to complete and handle any exceptions
+                errors = []
+                for future, gen_model in futures:
+                    try:
+                        future.result()
+                        print(f"[*] Seedgen workflow finished for task {task.task_id} with Generative Model {gen_model}")
+                    except Exception as e:
+                        print(f"[!] Error processing task {task.task_id} with model {gen_model}: {e}")
+                        errors.append((gen_model, e))
+                
+                if errors:
+                    error_msg = "; ".join([f"{model}: {err}" for model, err in errors])
+                    raise Exception(f"Seedgen failed for some models: {error_msg}")
+            
+            print(f"[*] Seedgen workflow finished for task {task.task_id} for all models")
             cb = functools.partial(ack_nack_message, ch, method.delivery_tag)
             connection.add_callback_threadsafe(cb)
         except Exception as e:
@@ -342,6 +367,10 @@ if __name__ == "__main__":
     )
     storage_dir = os.environ.get("STORAGE_DIR", "/crs")
     prefetch_count = int(os.environ.get("PREFETCH_COUNT", 8))
+    gen_model_list = os.environ.get(
+        "GEN_MODEL_LIST",
+        "gpt-4.1,o4-mini,claude-3.7-sonnet"
+    ).split(",")
 
     # Optional: Print configurations for debugging purposes
     print("Configuration:")
@@ -352,6 +381,7 @@ if __name__ == "__main__":
     print(f"  OTEL endpoint: {otel_endpoint}")
     print(f"  Storage Directory: {storage_dir}")
     print(f"  Prefetch count: {prefetch_count}")
+    print(f"  Generative models: {gen_model_list}")
 
     init_redis(redis_url)
     init_opentelemetry(otel_endpoint, otel_headers, otel_protocol, "seedgen")
@@ -362,5 +392,6 @@ if __name__ == "__main__":
         queue_name=queue_name,
         database_url=database_url,
         storage_dir=storage_dir,
-        prefetch_count=prefetch_count
+        prefetch_count=prefetch_count,
+        gen_model_list=gen_model_list
     )

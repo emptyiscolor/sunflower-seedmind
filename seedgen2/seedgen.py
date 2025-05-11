@@ -13,6 +13,8 @@ from seedgen2.utils.grpc import SeedD
 from seedgen2.utils.generators import SeedGeneratorStore
 from seedgen2.utils.functions import get_functions, FunctionInfo
 
+from seedgen2.presets import SeedGen2GenerativeModel
+
 import logging
 import os
 
@@ -33,7 +35,7 @@ class HarnessInfo:
 class SeedGenAgent:
     """Agent responsible for generating seeds based on various strategies."""
 
-    def __init__(self, result_dir: str, ip_addr: str, project_name: str, harness_binary: str):
+    def __init__(self, result_dir: str, ip_addr: str, project_name: str, harness_binary: str, gen_model: str):
         """Initialize the SeedGenAgent.
 
         Args:
@@ -50,6 +52,8 @@ class SeedGenAgent:
         self.store.set_result_dir(result_dir)
         self.tracker = Tracker()
         self.tracker.set_log_dir(result_dir)
+        SeedGen2GenerativeModel.set_custom_model(gen_model)
+
 
     def _find_harness_function(self, functions: List[FunctionInfo]) -> Optional[FunctionInfo]:
         return next(

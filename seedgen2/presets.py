@@ -29,26 +29,54 @@ class BaseModel:
         )
 
 
-@singleton
 class SeedGen2KnowledgeableModel(BaseModel):
     def __init__(self):
         super().__init__("SEEDGEN_KNOWLEDGEABLE_MODEL", "gpt-4o")
 
 
-@singleton
 class SeedGen2GenerativeModel(BaseModel):
+    _instance = None
+    _custom_model = None
+    
+    @classmethod
+    def set_custom_model(cls, model_name):
+        cls._custom_model = model_name
+        cls._instance = None  # Reset instance to force recreation with new model
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(SeedGen2GenerativeModel, cls).__new__(cls)
+            if cls._custom_model:
+                # Use custom model if set
+                model_name = cls._custom_model
+                cls._instance.model = ChatOpenAI(
+                    model=model_name,
+                    base_url=os.getenv("LITELLM_BASE_URL"),
+                    api_key=SecretStr(os.getenv("LITELLM_KEY")),
+                    include_response_headers=True
+                )
+                # Initialize json_model based on model capabilities
+                cls._instance.json_model = (
+                    cls._instance.model.bind(response_format={"type": "json_object"})
+                    if model_name != "qwen"
+                    else None
+                )
+                # Skip the __init__ method since we've already initialized
+                cls._instance._initialized = True
+            else:
+                cls._instance._initialized = False
+        return cls._instance
+    
     def __init__(self):
-        super().__init__("SEEDGEN_GENERATIVE_MODEL", "claude-3.5-sonnet")
+        if not hasattr(self, '_initialized') or not self._initialized:
+            super().__init__("SEEDGEN_GENERATIVE_MODEL", "claude-3.5-sonnet")
 
 
-@singleton
 class SeedGen2RefinerModel(BaseModel):
     def __init__(self):
         super().__init__("SEEDGEN_REFINER_MODEL", "o1")
 
 
-
-@singleton
 class SeedGen2InferModel(BaseModel):
     def __init__(self):
         super().__init__("SEEDGEN_INFER_MODEL", "o3-mini")
