@@ -19,7 +19,8 @@ from infra.aixcc import (
     load_project_config,
     print_project_info,
     run_mini_mode,
-    run_full_mode
+    run_full_mode,
+    run_codex_mode
 )
 from utils.task import TaskData
 from utils.telemetry import init_opentelemetry
@@ -67,7 +68,8 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
     into a .tmp/tasks/<task_id> folder and run SeedGen & SeedMini pipelines.
     """
     # Create a directory for this task
-    task_dir = os.path.abspath(os.path.join(".tmp", "tasks", str(task.task_id), gen_model))
+    task_dir = os.path.abspath(os.path.join(
+        ".tmp", "tasks", str(task.task_id), gen_model))
     os.makedirs(task_dir, exist_ok=True)
 
     # Extract repos
@@ -91,23 +93,30 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
     # Apply the diff files (code omitted for brevity)
     if diff_dir:
         diff_path = os.path.join(task_dir, diff_dir)
-        apply_diff_command = ["patch", "--batch", "--no-backup-if-mismatch", "-p1"]
+        apply_diff_command = ["patch", "--batch",
+                              "--no-backup-if-mismatch", "-p1"]
         if os.path.isfile(diff_path) and (diff_path.endswith('.patch') or diff_path.endswith('.diff')):
             with open(diff_path, "rb") as patch_file:
-                subprocess.run(apply_diff_command, stdin=patch_file, check=True, cwd=os.path.join(task_dir, task.focus))
-            print(f"[+] Applied diff from {diff_path} to {os.path.join(task_dir, task.focus)}")
+                subprocess.run(apply_diff_command, stdin=patch_file,
+                               check=True, cwd=os.path.join(task_dir, task.focus))
+            print(
+                f"[+] Applied diff from {diff_path} to {os.path.join(task_dir, task.focus)}")
         elif os.path.isdir(diff_path):
-            diff_files = [f for f in os.listdir(diff_path) if f.endswith('.patch') or f.endswith('.diff')]
+            diff_files = [f for f in os.listdir(diff_path) if f.endswith(
+                '.patch') or f.endswith('.diff')]
             for diff_file in diff_files:
                 diff_file_path = os.path.join(diff_path, diff_file)
                 if os.path.exists(diff_file_path):
                     with open(diff_file_path, "rb") as patch_file:
-                        subprocess.run(apply_diff_command, stdin=patch_file, check=True, cwd=os.path.join(task_dir, task.focus))
-                    print(f"[+] Applied diff from {diff_file_path} to {os.path.join(task_dir, task.focus)}")
+                        subprocess.run(apply_diff_command, stdin=patch_file,
+                                       check=True, cwd=os.path.join(task_dir, task.focus))
+                    print(
+                        f"[+] Applied diff from {diff_file_path} to {os.path.join(task_dir, task.focus)}")
                 else:
                     print(f"[!] Diff file {diff_file_path} does not exist")
         else:
-            print(f"[!] The provided diff path {diff_path} is neither a valid file nor a directory.")
+            print(
+                f"[!] The provided diff path {diff_path} is neither a valid file nor a directory.")
 
     # Prepare for seed generation
     fuzz_tooling = os.path.join(task_dir, fuzz_tooling_dir)
@@ -143,13 +152,26 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
             database_url,
             storage_dir
         )
+        future_codex = executor.submit(
+            run_codex_mode,
+            task.project_name,
+            project_config,
+            os.path.join(task_dir, task.focus),
+            os.path.join(task_dir, fuzz_tooling_dir),
+            gen_model,
+            save_result_to_db,
+            task,
+            database_url,
+            storage_dir
+        )
 
         errors = []
-        for future in as_completed([future_mini, future_full]):
+        for future in as_completed([future_full, future_mini, future_codex]):
             try:
                 future.result()
             except Exception as exc:
-                print(f"[!] A seed generation process generated an exception: {exc}")
+                print(
+                    f"[!] A seed generation process generated an exception: {exc}")
                 errors.append(exc)
         if errors:
             raise Exception("One or more harnesses failed")
@@ -262,24 +284,30 @@ def listen_for_tasks(
             with ThreadPoolExecutor(max_workers=len(gen_model_list)) as executor:
                 futures = []
                 for gen_model in gen_model_list:
-                    future = executor.submit(run_seedgen_for_task, task, database_url, storage_dir, gen_model)
+                    future = executor.submit(
+                        run_seedgen_for_task, task, database_url, storage_dir, gen_model)
                     futures.append((future, gen_model))
-                
+
                 # Wait for all futures to complete and handle any exceptions
                 errors = []
                 for future, gen_model in futures:
                     try:
                         future.result()
-                        print(f"[*] Seedgen workflow finished for task {task.task_id} with Generative Model {gen_model}")
+                        print(
+                            f"[*] Seedgen workflow finished for task {task.task_id} with Generative Model {gen_model}")
                     except Exception as e:
-                        print(f"[!] Error processing task {task.task_id} with model {gen_model}: {e}")
+                        print(
+                            f"[!] Error processing task {task.task_id} with model {gen_model}: {e}")
                         errors.append((gen_model, e))
-                
+
                 if errors:
-                    error_msg = "; ".join([f"{model}: {err}" for model, err in errors])
-                    raise Exception(f"Seedgen failed for some models: {error_msg}")
-            
-            print(f"[*] Seedgen workflow finished for task {task.task_id} for all models")
+                    error_msg = "; ".join(
+                        [f"{model}: {err}" for model, err in errors])
+                    raise Exception(
+                        f"Seedgen failed for some models: {error_msg}")
+
+            print(
+                f"[*] Seedgen workflow finished for task {task.task_id} for all models")
             cb = functools.partial(ack_nack_message, ch, method.delivery_tag)
             connection.add_callback_threadsafe(cb)
         except Exception as e:
@@ -293,7 +321,8 @@ def listen_for_tasks(
 
             if retry_count < 3:
                 new_retry = retry_count + 1
-                print(f"[!] Requeuing task {task.task_id}, attempt {new_retry}")
+                print(
+                    f"[!] Requeuing task {task.task_id}, attempt {new_retry}")
                 # Create updated headers with the new retry count.
                 new_headers = properties.headers.copy() if properties.headers else {}
                 new_headers["x-retry"] = new_retry
@@ -308,7 +337,8 @@ def listen_for_tasks(
                     )
                 )
             else:
-                print(f"[!] Task {task.task_id} failed after {retry_count} attempts. Not requeuing.")
+                print(
+                    f"[!] Task {task.task_id} failed after {retry_count} attempts. Not requeuing.")
 
             # In any case, acknowledge the original message so it is removed from the queue.
             connection.add_callback_threadsafe(

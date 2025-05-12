@@ -16,7 +16,7 @@ BEGIN
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'fuzzertypeenum') THEN
-        CREATE TYPE fuzzertypeenum AS ENUM ('seedgen', 'seedmini', 'prime', 'general', 'directed', 'corpus');
+        CREATE TYPE fuzzertypeenum AS ENUM ('seedgen', 'seedmini', 'seedcodex', 'prime', 'general', 'directed', 'corpus');
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'sanitizerenum') THEN

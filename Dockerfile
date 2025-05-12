@@ -50,6 +50,7 @@ RUN cd seedd && make
 FROM cruizba/ubuntu-dind:noble-latest AS seedgen_runner
 
 ENV DEBIAN_FRONTEND=noninteractive
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 RUN apt-get update && apt-get -y install \
     7zip \
     autoconf \
@@ -90,6 +91,7 @@ RUN apt-get update && apt-get -y install \
     wget \
     xz-utils \
     zip \
+    nodejs \
     && apt-get clean \
     && rm -rf /var/lib/{apt,dpkg,cache,log}
 
@@ -109,7 +111,10 @@ COPY --from=builder_bandld /app/bandld/target/release/bandld ./infra/prebuilt/ba
 COPY --from=builder_getcov /app/getcov/target/release/getcov ./infra/prebuilt/getcov
 COPY --from=builder_seedd /app/seedd/bin/seedd ./infra/prebuilt/seedd
 
+RUN npm install -g @modelcontextprotocol/server-filesystem
+RUN npm install -g @openai/codex@0.1.2504211509
 RUN pip3 install -r requirements.txt --break-system-packages
+RUN npm install -g tree-sitter-cli
 
 ENV PYTHONUNBUFFERED=1
 

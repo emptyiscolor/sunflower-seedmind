@@ -37,12 +37,12 @@ class SeedGen2KnowledgeableModel(BaseModel):
 class SeedGen2GenerativeModel(BaseModel):
     _instance = None
     _custom_model = None
-    
+
     @classmethod
     def set_custom_model(cls, model_name):
         cls._custom_model = model_name
         cls._instance = None  # Reset instance to force recreation with new model
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(SeedGen2GenerativeModel, cls).__new__(cls)
@@ -57,7 +57,8 @@ class SeedGen2GenerativeModel(BaseModel):
                 )
                 # Initialize json_model based on model capabilities
                 cls._instance.json_model = (
-                    cls._instance.model.bind(response_format={"type": "json_object"})
+                    cls._instance.model.bind(
+                        response_format={"type": "json_object"})
                     if model_name != "qwen"
                     else None
                 )
@@ -66,7 +67,7 @@ class SeedGen2GenerativeModel(BaseModel):
             else:
                 cls._instance._initialized = False
         return cls._instance
-    
+
     def __init__(self):
         if not hasattr(self, '_initialized') or not self._initialized:
             super().__init__("SEEDGEN_GENERATIVE_MODEL", "claude-3.5-sonnet")
