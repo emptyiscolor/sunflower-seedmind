@@ -324,9 +324,17 @@ if __name__ == "__main__":
         "DATABASE_URL",
         "postgresql://user:password@localhost/mydatabase"
     )
-    redis_url = os.environ.get(
-        "REDIS_URL",
-        "redis://localhost:6379"
+    redis_sentinel_hosts = os.environ.get(
+        "REDIS_SENTINEL_HOSTS",
+        "localhost:26379"
+    )
+    redis_master = os.environ.get(
+        "REDIS_MASTER",
+        "mymaster"
+    )
+    redis_password = os.environ.get(
+        "REDIS_PASSWORD",
+        None
     )
     otel_endpoint = os.getenv(
         "OTEL_EXPORTER_OTLP_ENDPOINT",
@@ -348,12 +356,16 @@ if __name__ == "__main__":
     print(f"  RabbitMQ Host: {rabbitmq_host}")
     print(f"  Queue Name: {queue_name}")
     print(f"  Database URL: {database_url}")
-    print(f"  Redis URL: {redis_url}")
+    print(f"  Redis Sentinel hosts: {redis_sentinel_hosts}")
+    print(f"  Redis Master: {redis_master}")
+    print(f"  Redis Password: {redis_password}")
     print(f"  OTEL endpoint: {otel_endpoint}")
     print(f"  Storage Directory: {storage_dir}")
     print(f"  Prefetch count: {prefetch_count}")
 
-    init_redis(redis_url)
+    redis_sentinel_hosts = [
+        (h, int(p)) for h, p in (item.split(":") for item in redis_sentinel_hosts.split(","))]
+    init_redis(redis_sentinel_hosts, redis_master, password=redis_password)
     init_opentelemetry(otel_endpoint, otel_headers, otel_protocol, "seedgen")
 
     # Start listening for tasks with the given args
