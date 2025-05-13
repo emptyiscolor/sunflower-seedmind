@@ -123,7 +123,7 @@ def compile_project(fuzz_tooling, project_name, project_config, src_path):
         fuzz_tooling, "projects", project_name, "Dockerfile")
     if not os.path.exists(dockerfile_path):
         raise FileNotFoundError("Dockerfile not found in project directory")
-    if subprocess.run(["docker", "ps"]).returncode != 0:
+    if subprocess.run(["docker", "ps"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
         raise FileNotFoundError("Docker not found on the host machine")
 
     if src_path:
@@ -142,7 +142,7 @@ def compile_project(fuzz_tooling, project_name, project_config, src_path):
     # print the command for debugging
     print(f"[+] Running command: {' '.join(build_command)}")
 
-    subprocess.run(build_command, check=True)
+    subprocess.run(build_command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # Copy tooling binaries to local project src directory
     tool_dir = os.path.join(src_path, "42_B3YOND_TOOLS")
@@ -202,17 +202,15 @@ def compile_project(fuzz_tooling, project_name, project_config, src_path):
     # print the command for debugging
     print(f"[+] Running command: {' '.join(run_command)}")
 
-    process = subprocess.Popen(
-        run_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, text=True)
-    stdout, stderr = process.communicate()
-    if process.returncode != 0:
+    result = subprocess.run(run_command, capture_output=True, universal_newlines=True, text=True)
+    if result.returncode != 0:
         raise subprocess.CalledProcessError(
-            process.returncode,
-            run_command,
-            stdout + stderr
+            result.returncode, 
+            run_command, 
+            result.stdout + result.stderr
         )
 
-    combined_output = stdout + stderr
+    combined_output = result.stdout + result.stderr
     image_name = None
     # Look for "docker build -t "
     match = re.search(r'docker build.*?-t\s+(\S+)', combined_output, re.DOTALL)
@@ -278,7 +276,7 @@ def run_project(project_dir, fuzz_tooling, image_name, project_name, src_path) -
         + environment_commands
         + [image_name]
     )
-    result = subprocess.run(run_command, check=True, stdout=subprocess.PIPE)
+    result = subprocess.run(run_command, check=True, capture_output=True)
     container_id = result.stdout.decode().strip()
     return container_id
 
@@ -468,6 +466,7 @@ def run_full_mode(
         return
 
     # Compile the project
+    print(f"[*] Building project for seedgen: {project_name}")
     try:
         image_name, fuzzers = compile_project(
             fuzz_tooling, project_name, project_config, src_path)
