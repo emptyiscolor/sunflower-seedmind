@@ -21,3 +21,8 @@ opentelemetry-sdk==1.30.0
 opentelemetry-exporter-otlp==1.30.0
 openlit==1.33.11
 redis==5.2.1
+mcp-agent
+anthropic
+uv
+mcp-server-fetch
+mcp-server-tree-sitter

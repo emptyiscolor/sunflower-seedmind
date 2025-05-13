@@ -7,6 +7,8 @@ from seedgen2.agents.filetype import generate_based_on_filetype, get_filetype, g
 from seedgen2.agents.glance import generate_first_script
 from seedgen2.utils.generators import SeedGeneratorStore
 
+from seedgen2.presets import SeedGen2GenerativeModel
+
 import logging
 import os
 
@@ -18,7 +20,7 @@ logging.basicConfig(level=logging.INFO,
 class SeedMiniAgent:
     """Agent responsible for generating seeds based on various strategies."""
 
-    def __init__(self, result_dir: str, project_name: str, harness_binary: str, harness_source: str):
+    def __init__(self, result_dir: str, project_name: str, harness_binary: str, harness_source: str, gen_model: str):
         """Initialize the SeedGenAgent.
 
         Args:
@@ -36,6 +38,7 @@ class SeedMiniAgent:
         self.store.set_result_dir(result_dir)
         self.tracker = Tracker()
         self.tracker.set_log_dir(result_dir)
+        SeedGen2GenerativeModel.set_custom_model(gen_model)
 
 
     def run(self) -> None:
