@@ -112,7 +112,7 @@ COPY --from=builder_getcov /app/getcov/target/release/getcov ./infra/prebuilt/ge
 COPY --from=builder_seedd /app/seedd/bin/seedd ./infra/prebuilt/seedd
 
 RUN npm install -g @modelcontextprotocol/server-filesystem
-RUN npm install -g @openai/codex@0.1.2504211509
+RUN npm install -g @openai/codex@0.1.2504301751
 RUN pip3 install -r requirements.txt --break-system-packages
 RUN npm install -g tree-sitter-cli
 

@@ -8,7 +8,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 
 # Install global npm packages
 RUN npm install -g @modelcontextprotocol/server-filesystem
-RUN npm install -g @openai/codex@0.1.2504211509
+RUN npm install -g @openai/codex@0.1.2504301751
 
 # Create the necessary log directory
 RUN mkdir -p /workspaces/codex-deduplicator/logs && chmod 777 /workspaces/codex-deduplicator/logs
