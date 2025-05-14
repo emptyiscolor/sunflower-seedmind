@@ -142,7 +142,8 @@ def compile_project(fuzz_tooling, project_name, project_config, src_path):
     # print the command for debugging
     print(f"[+] Running command: {' '.join(build_command)}")
 
-    subprocess.run(build_command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(build_command, check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # Copy tooling binaries to local project src directory
     tool_dir = os.path.join(src_path, "42_B3YOND_TOOLS")
@@ -202,11 +203,12 @@ def compile_project(fuzz_tooling, project_name, project_config, src_path):
     # print the command for debugging
     print(f"[+] Running command: {' '.join(run_command)}")
 
-    result = subprocess.run(run_command, capture_output=True, universal_newlines=True, text=True)
+    result = subprocess.run(run_command, capture_output=True,
+                            universal_newlines=True, text=True)
     if result.returncode != 0:
         raise subprocess.CalledProcessError(
-            result.returncode, 
-            run_command, 
+            result.returncode,
+            run_command,
             result.stdout + result.stderr
         )
 
@@ -408,6 +410,7 @@ def run_mini_mode(
                 f"[*] SeedMini: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
             log_seedgen(task.task_id, "seedmini_stored_to_db", target=task.project_name,
                         harness_name=harness_binary, gen_model=gen_model)
+            redis_client = get_redis_client()
             if redis_client:
                 redis_client.set(
                     f"seedmini:{task.task_id}:{gen_model}:{harness_binary}", "done")
@@ -571,6 +574,7 @@ def run_full_mode(
                 f"[*] Seedgen: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
             log_seedgen(task.task_id, "seedgen_full_stored_to_db",
                         target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
+            redis_client = get_redis_client()
             if redis_client:
                 redis_client.set(
                     f"seedgen:{task.task_id}:{gen_model}:{harness_binary}", "done")
@@ -691,6 +695,7 @@ def run_codex_mode(
                 f"[*] SeedCodex: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
             log_seedgen(task.task_id, "seedcodex_stored_to_db", target=task.project_name,
                         harness_name=harness_binary, gen_model=gen_model)
+            redis_client = get_redis_client()
             if redis_client:
                 redis_client.set(
                     f"seedcodex:{task.task_id}:{gen_model}:{harness_binary}", "done")
