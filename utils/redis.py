@@ -30,22 +30,16 @@ def init_redis(sentinel_hosts_list, master_name_str, password=None, db=0):
     redis_db = db
 
     # Initialize Sentinel
-    sentinel = Sentinel(sentinel_hosts, socket_timeout=5.0, password=password)
+    sentinel = Sentinel(sentinel_hosts, socket_timeout=30.0, password=password)
 
     try:
         # Get master for the specified master name with failover support
         redis_client = sentinel.master_for(
             master_name,
-            socket_timeout=5.0,
+            socket_timeout=30.0,
             password=password,
             db=db,
-            # Enable automatic reconnection to the new master after failover
-            retry_on_timeout=True,
-            # Add connection pool settings for better failover handling
-            connection_pool_kwargs={
-                'max_connections': 50,
-                'retry_on_timeout': True
-            }
+            retry_on_timeout=True
         )
 
         if redis_client.ping():
@@ -70,7 +64,8 @@ def get_redis_client():
                 master_name,
                 socket_timeout=30.0,
                 password=redis_password,
-                db=redis_db
+                db=redis_db,
+                retry_on_timeout=True
             )
             if redis_client.ping():
                 print("Redis client reconnected successfully")
