@@ -1,7 +1,5 @@
 from typing import Any, List, TypedDict, Annotated, Optional
 from dataclasses import dataclass
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AnyMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -129,49 +127,6 @@ if __name__ == "__main__":
         components.append(context)
         components.append(McpPrompts.CODE_ANALYSIS_PROMPT)
         return "\n".join(components)
-
-
-class CodeAnalysisAgent:
-    """Agent responsible for code analysis and planner.
-    Note: Use a separate agent for code analysis as the code base consumes too many tokens.
-    """
-
-    def __init__(self):
-        self.client = MultiServerMCPClient(
-            {
-                "filesystem": {
-                    "command": "npx",
-                    "args": ["-y", "@modelcontextprotocol/server-filesystem"],
-                    "transport": "stdio",
-                },
-                "treesitter": {
-                    "command": "python3",
-                    "args": ["-m", "mcp_server_tree_sitter.server"],
-                    "transport": "stdio",
-                }
-            }
-        )
-        self.agent = None
-
-    async def setup_analysis_agent_react(self, model_name: str = "openai:gpt-4.1") -> Any:
-        """Set up the react agent."""
-        tools = await self.client.get_tools()
-        self.agent = create_react_agent(model_name, tools)
-        # TODO: math_response = await agent.ainvoke({"messages": "what's (3 + 5) x 12?"})
-
-    async def setup_analysis_agent_stateful(self, model_name: str = "openai:gpt-4.1") -> Any:
-        """Set up LangGraph StateGraph."""
-        # builder = StateGraph(MessagesState)
-        # builder.add_node(call_model)
-        # builder.add_node(ToolNode(tools))
-        # builder.add_edge(START, "call_model")
-        # builder.add_conditional_edges(
-        #     "call_model",
-        #     tools_condition,
-        # )
-        # builder.add_edge("tools", "call_model")
-        # graph = builder.compile()
-        pass
 
 
 @dataclass
