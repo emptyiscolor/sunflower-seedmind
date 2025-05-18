@@ -33,9 +33,9 @@ class McpPrompts:
     CODE_ANALYSIS_PROMPT = """
 **Objective:** Analyze the provided fuzzing harness code and its interaction with the associated codebase to understand the structure of the test cases it expects. The ultimate aim is to gather information critical for effective fuzzing.
 
-**Inputs You Will Provide:**
+**Inputs Provided:**
 *   The fuzzing harness code.
-*   (Optionally) The broader codebase the harness interacts with.
+*   (Optionally) The codebase the harness interacts with.
 
 **Analysis Guidelines & Tasks:**
 
@@ -45,6 +45,8 @@ class McpPrompts:
 
 2.  **AST-based Analysis (Conditional Requirement):**
     *   If Abstract Syntax Tree (AST) analysis is deemed necessary for a comprehensive understanding of the input structure or control flow (e.g., to trace complex data dependencies or specific parsing logic), the relevant code/project must be registered with Treesitter (tools provided) prior to such analysis.*
+    * use register_project_tools to register the project with Treesitter at first.
+    * avoid using get_ast because it will consume too many tokens.
 
 3.  **Harness Interaction & Input Structure Deconstruction:**
     *   Analyze how the harness code processes its input data.
@@ -60,7 +62,16 @@ class McpPrompts:
         *   **Control Flow Dependencies (Fuzzing Dictionary Candidates):** Identify specific strings, numbers, magic values, or patterns within the input that directly influence control flow decisions within the harness or the called functions (e.g., values used in `switch` statements, `if/else if` conditions, or as command identifiers). These are crucial for building effective fuzzing dictionaries.
 
 **Expected Output from Me:**
-*   A coding plan on how to write a Python script for the test case generator. 
+*   A detailed description of the expected input
+*   A coding plan on how to write a Python script for the test case generator.
+
+**Expected Output Format:**
+*  The output should be in a JSON object.
+*  The JSON object should contain the following keys:
+    - data_format_doc: A detailed description of the expected input structure.
+    - plan: A coding plan on how to write a Python script for the test case generator.
+* an example of the expected JSON output:
+    {{"data_format_doc": string ...docs on how to compose the data structure, plan: string...1. create a list of ...; 2. create a fucntion to ...}}
 
 """
 
@@ -123,7 +134,6 @@ if __name__ == "__main__":
     def get_pre_analysis_prompt(prompt: str, context: str) -> str:
         """Builds the full prompt with optional requirements and example."""
         components = [prompt]
-        components.append(McpPrompts.BASIC_PROMPT)
         components.append(context)
         components.append(McpPrompts.CODE_ANALYSIS_PROMPT)
         return "\n".join(components)

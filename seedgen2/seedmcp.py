@@ -1,54 +1,80 @@
 # Seed Generator wiht MCP adaptors
 # Only relies on the harness source code, without SeedD and getcov
+import asyncio
 from pathlib import Path
 
 from seedgen2.agents.alignment import align_script, update_doc_mini
 from seedgen2.agents.filetype import generate_based_on_filetype, get_filetype, generate_reference_script
-from seedgen2.agents.glance import generate_first_script
+from seedgen2.agents.glance import generate_first_script, initial_code_analysis
 from seedgen2.utils.generators import SeedGeneratorStore
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.prebuilt import create_react_agent
-from typing import Any, Dict
+from pydantic import BaseModel, Field
+from typing import Any, List, Callable, Optional
 
 from seedgen2.presets import SeedGen2GenerativeModel
 
 import logging
-import os
+import json
 
 from seedgen2.utils.tracker import Tracker
+import re
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
+
+class MCPAnalysisResponse(BaseModel):
+    data_format_doc: str = Field(description="docs on how to compose the data structure, like expected input format")
+    plan: str = Field(description="Code plan from the analysis")
 
 class CodeAnalysisAgent:
     """Agent responsible for code analysis and planner.
     Note: Use a separate agent for code analysis as the code base consumes too many tokens.
     """
 
-    def __init__(self):
+    def __init__(self, harness_source: str, project_path: str):
         self.client = MultiServerMCPClient(
             {
                 "filesystem": {
                     "command": "npx",
-                    "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+                    "args": ["-y", "@modelcontextprotocol/server-filesystem", project_path],
                     "transport": "stdio",
                 },
                 "treesitter": {
                     "command": "python3",
-                    "args": ["-m", "mcp_server_tree_sitter.server"],
+                    "args": ["-m", "mcp_server_tree_sitter.server", "--config", "treesitter_config.yaml"],
                     "transport": "stdio",
                 }
             }
         )
         self.agent = None
+        # NOTE: update to List if we need to perform parallel analysis on multiple harnesses sources.
+        self.harness_source = harness_source
+        self.project_path = project_path
+        self.analysis_result = {}
+    
+    def extract_json_result(self, resp_text: str) -> dict:
+        """Extract JSON result between ```json and ``` from the raw text with regex."""
+        try:
+            pattern = r"```json\s*([\s\S]*?)\s*```"
+            match = re.search(pattern, resp_text)
+            if match:
+                json_str = match.group(1)
+                return json.loads(json_str)
+            else:
+                logging.warning("No JSON block found in the response text")
+                return {}
+        except (ValueError, json.JSONDecodeError) as e:
+            logging.error(f"Failed to extract JSON: {e}")
+            return {}
 
-    async def setup_analysis_agent_react(self, model_name: str = "openai:gpt-4o") -> Any:
+    async def setup_analysis_agent_react(self, model_name: str = "gpt-4o") -> Any:
         """Set up the react agent."""
         tools = await self.client.get_tools()
-        self.agent = create_react_agent(model_name, tools)
-        # TODO: mcp_response = await agent.ainvoke({"messages": "Show me the coding plan on how to write the Python functions to prepare parts of the input for all the required data structures"})
+        # logging.debug(f"MCP Tools: {tools}")
+        self.agent = create_react_agent(model_name, tools, response_format=MCPAnalysisResponse)
 
-    async def setup_analysis_agent_stateful(self, model_name: str = "openai:gpt-4o") -> Any:
+    async def setup_analysis_agent_stateful(self, model_name: str = "gpt-4o") -> Any:
         """Set up LangGraph StateGraph."""
         # builder = StateGraph(MessagesState)
         # builder.add_node(call_model)
@@ -60,7 +86,55 @@ class CodeAnalysisAgent:
         # )
         # builder.add_edge("tools", "call_model")
         # graph = builder.compile()
+        # self.agent = ?
+        # TODO: complete later
         pass
+
+    async def run_analysis(self, user_msg=None) -> dict:
+        """Run the analysis.
+        Returns:
+            dict: Analysis result
+        """
+        result = {}
+        if self.agent:
+            user_message = user_msg or "Project Path:{project_path}\n\nHarness code:{harness_code}\n".format(
+                harness_code=self.harness_source,
+                project_path=self.project_path
+            )
+            mcp_response = await self.agent.ainvoke({"messages": user_message}, {"recursion_limit": 30})
+            if mcp_response:
+                structured_response = mcp_response["structured_response"]
+                logging.info(f"Analysis response: {structured_response}")
+                result = {"structure": structured_response.data_format_doc, "plan": structured_response.plan}
+            else:
+                logging.error("No response from MCP agent.")
+
+        self.analysis_result = result
+        logging.info(f"Analysis result: {self.analysis_result}")
+
+    def wait_for_analysis(self, model_name: str = "gpt-4o", usr_msg=None, callback: Optional[Callable[[Any], None]] = None) -> None:
+        """Wait for the analysis to complete."""
+        try:
+            logging.info("Waiting for MCP analysis to complete...")
+            asyncio.run(self.setup_analysis_agent_react(model_name))
+            logging.info("Running analysis...")
+            asyncio.run(self.run_analysis(usr_msg))
+
+            if self.agent and callback:
+                callback(self.analysis_result)
+
+        except RuntimeError as e:
+            if " asyncio.run() cannot be called from a running event loop" in str(e):
+                logging.error(f"Error: {e}")
+                print("This typically means you're trying to call asyncio.run() "
+                      "from within an already running async environment (e.g., inside another "
+                      "async function, or a framework that manages its own loop like Jupyter/IPython "
+                      "with autoawait). Consider restructuring or using nest_asyncio if appropriate.")
+            else:
+                # Re-raise other RuntimeErrors
+                raise
+
+        logging.info("MCP analysis completed successfully.")
 
 
 class SeedMcpAgent:
@@ -93,10 +167,18 @@ class SeedMcpAgent:
                      self.harness_binary}")
 
         # Seed generation pipeline
+        # 1. Analyze the source code first to get suggestions on data structures and code plans
+        code_analysis_result = initial_code_analysis(
+            CodeAnalysisAgent(self.harness_source,
+                              str(self.src_dir.absolute())),
+            self.harness_source,
+            self.harness_binary,
+            str(self.src_dir.absolute())
+        )
 
-        # 1. Generate 3 ingredients: initial generator script, structure documentation, and target filetype
+        # 2. Generate 3 ingredients: initial generator script, structure documentation, and target filetype
         current_result = generate_first_script(
-            None, self.harness_source, self.harness_binary)
+            None, self.harness_source, self.harness_binary, additional_context=code_analysis_result)
         current_script = current_result.generator_script
         current_doc = update_doc_mini(self.harness_source, self.harness_binary)
         filetype_result = get_filetype(
@@ -107,7 +189,7 @@ class SeedMcpAgent:
         filetype_result = filetype_result.translate(
             str.maketrans('', '', "\"'`"))  # remove quotes and ticks
 
-        # 2. Generate the complete generator script
+        # 3. Generate the complete generator script
         if filetype_result == "unknown":
             logging.info(
                 f"Unknown filetype, only using structure information for generation")
