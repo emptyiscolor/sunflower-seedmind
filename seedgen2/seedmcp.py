@@ -104,7 +104,7 @@ class CodeAnalysisAgent:
             mcp_response = await self.agent.ainvoke({"messages": user_message}, {"recursion_limit": 30})
             if mcp_response:
                 structured_response = mcp_response["structured_response"]
-                logging.info(f"Analysis response: {structured_response}")
+                logging.debug(f"Analysis response: {structured_response}")
                 result = {"structure": structured_response.data_format_doc, "plan": structured_response.plan}
             else:
                 logging.error("No response from MCP agent.")
