@@ -519,7 +519,7 @@ def run_mcp_mode(
                 task,
                 harness_binary,
                 os.path.join(fuzzer_dir, "seeds"),
-                "seedmcp",
+                "seedmini",
                 gen_model
             )
             print(
