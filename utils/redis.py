@@ -1,7 +1,12 @@
 import redis
 from redis.sentinel import Sentinel
-import time
-import logging
+from redis.backoff import ExponentialBackoff
+from redis.retry import Retry
+from redis.exceptions import (
+    BusyLoadingError,
+    ConnectionError,
+    TimeoutError
+)
 
 redis_client = None
 sentinel = None
@@ -34,12 +39,14 @@ def init_redis(sentinel_hosts_list, master_name_str, password=None, db=0):
 
     try:
         # Get master for the specified master name with failover support
+        retry = Retry(ExponentialBackoff(), 3)
         redis_client = sentinel.master_for(
             master_name,
             socket_timeout=30.0,
             password=password,
             db=db,
-            retry_on_timeout=True
+            retry=retry,
+            retry_on_error=[BusyLoadingError, ConnectionError, TimeoutError]
         )
 
         if redis_client.ping():
@@ -57,15 +64,18 @@ def get_redis_client():
     try:
         if redis_client and redis_client.ping():
             return redis_client
-    except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError):
+    except (ConnectionError, TimeoutError, BusyLoadingError):
         # Connection failed, try to reconnect
         try:
+            retry = Retry(ExponentialBackoff(), 3)
             redis_client = sentinel.master_for(
                 master_name,
                 socket_timeout=30.0,
                 password=redis_password,
                 db=redis_db,
-                retry_on_timeout=True
+                retry=retry,
+                retry_on_error=[BusyLoadingError,
+                                ConnectionError, TimeoutError]
             )
             if redis_client.ping():
                 print("Redis client reconnected successfully")
