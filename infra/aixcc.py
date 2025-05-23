@@ -366,8 +366,6 @@ def run_mini_mode(
             return
         print(
             f"[*] Running SeedMini for harness {harness_binary} with Generative Model {gen_model}")
-        log_seedgen(task.task_id, "seedmini_started", target=task.project_name,
-                    harness_name=harness_binary, gen_model=gen_model)
 
         redis_client = get_redis_client()
         fuzzer_dir = os.path.join(project_dir, harness_binary)
@@ -378,14 +376,10 @@ def run_mini_mode(
                 if is_done == b"done":
                     print(
                         f"[*] Harness {harness_binary} already processed. Skipping.")
-                    log_seedgen(task.task_id, "seedmini_skipped_already_processed_harness",
-                                target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
                     return
                 else:
                     print(
                         f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
-                    log_seedgen(task.task_id, "seedmini_started_reprocessing_incomplete_harness",
-                                target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
                     shutil.rmtree(fuzzer_dir)
             else:
                 shutil.rmtree(fuzzer_dir)
@@ -394,8 +388,6 @@ def run_mini_mode(
         agent = SeedMiniAgent(fuzzer_dir, project_name, harness_binary,
                               fuzzers[harness_binary], gen_model)
         agent.run()
-        log_seedgen(task.task_id, "seedmini_processed_harness",
-                    target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
 
         if save_result_func:
             save_result_func(
@@ -409,7 +401,7 @@ def run_mini_mode(
             )
             print(
                 f"[*] SeedMini: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
-            log_seedgen(task.task_id, "seedmini_stored_to_db", target=task.project_name,
+            log_seedgen(task.task_id, "generated_seeds_mini", target=task.project_name,
                         harness_name=harness_binary, gen_model=gen_model)
             redis_client = get_redis_client()
             if redis_client:
@@ -437,9 +429,8 @@ def run_mini_mode(
 
                 print(
                     f"[!] Harness '{harness_name}' failed with exception: {exc}")
-                log_seedgen(task.task_id, "seedmini_harness_failed",
-                            target=task.project_name, harness_name=harness_name, gen_model=gen_model)
-                errors[harness_name] = exc.with_traceback()
+
+                errors[harness_name] = exc
 
         if errors:
             error_details = "\n".join(
@@ -448,8 +439,7 @@ def run_mini_mode(
                 f"SeedMini failed for {len(errors)} harness(es):\n{error_details}")
         print(
             f"[*] SeedMini successfully executed on all harnesses with Generative Model {gen_model}")
-        log_seedgen(task.task_id, "seedmini_finished",
-                    target=task.project_name, gen_model=gen_model)
+
 
 def run_mcp_mode(
     project_name,
@@ -563,8 +553,6 @@ def run_mcp_mode(
                 f"SeedMini failed for {len(errors)} harness(es):\n{error_details}")
         print(
             f"[*] SeedMini successfully executed on all harnesses with Generative Model {gen_model}")
-        log_seedgen(task.task_id, "seedmini_finished",
-                    target=task.project_name, gen_model=gen_model)
 
 
 def run_full_mode(
@@ -591,12 +579,7 @@ def run_full_mode(
             fuzz_tooling, project_name, project_config, src_path)
     except Exception as e:
         print(f"[!] Error occurred when building {project_name}:", e)
-        log_seedgen(task.task_id, "seedgen_full_build_failed",
-                    target=task.project_name, gen_model=gen_model)
         raise
-
-    log_seedgen(task.task_id, "seedgen_full_built_target",
-                target=task.project_name, gen_model=gen_model)
 
     project_dir = os.path.abspath(os.path.join(
         ".tmp", "tasks", task.task_id, gen_model, "seedgen", project_name))
@@ -622,8 +605,6 @@ def run_full_mode(
             return
         print(
             f"[*] Running Seedgen for harness {harness_binary} with Generative Model {gen_model}")
-        log_seedgen(task.task_id, "seedgen_full_started", target=task.project_name,
-                    harness_name=harness_binary, gen_model=gen_model)
         try:
             # Start the daemon
             container_id = run_project(
@@ -637,14 +618,10 @@ def run_full_mode(
                     if is_done == b"done":
                         print(
                             f"[*] Harness {harness_binary} already processed. Skipping.")
-                        log_seedgen(task.task_id, "seedgen_full_skipped_already_processed_harness",
-                                    target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
                         return
                     else:
                         print(
                             f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
-                        log_seedgen(task.task_id, "seedgen_full_started_reprocessing_incomplete_harness",
-                                    target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
                         shutil.rmtree(fuzzer_dir)
                 else:
                     shutil.rmtree(fuzzer_dir)
@@ -673,9 +650,6 @@ def run_full_mode(
                 subprocess.run(["docker", "stop", container_id], check=True)
                 subprocess.run(["docker", "rm", container_id], check=True)
 
-        log_seedgen(task.task_id, "seedgen_full_processed_harness",
-                    target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
-
         if save_result_func:
             save_result_func(
                 database_url,
@@ -688,7 +662,7 @@ def run_full_mode(
             )
             print(
                 f"[*] Seedgen: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
-            log_seedgen(task.task_id, "seedgen_full_stored_to_db",
+            log_seedgen(task.task_id, "generated_seeds_full",
                         target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
             redis_client = get_redis_client()
             if redis_client:
@@ -716,8 +690,6 @@ def run_full_mode(
 
                 print(
                     f"[!] Harness '{harness_name}' failed with exception: {exc}")
-                log_seedgen(task.task_id, "seedgen_full_harness_failed",
-                            target=task.project_name, harness_name=harness_name, gen_model=gen_model)
                 errors[harness_name] = exc
 
         if errors:
@@ -727,8 +699,6 @@ def run_full_mode(
                 f"Seedgen Full mode failed for {len(errors)} harness(es):\n{error_details}")
         print(
             f"[*] Seedgen Full mode successfully executed on all harnesses with Generative Model {gen_model}")
-        log_seedgen(task.task_id, "seedgen_full_finished",
-                    target=task.project_name, gen_model=gen_model)
 
 
 def run_codex_mode(
@@ -765,8 +735,6 @@ def run_codex_mode(
             return
         print(
             f"[*] Running SeedCodex for harness {harness_binary} with Generative Model {gen_model}")
-        log_seedgen(task.task_id, "seedcodex_started", target=task.project_name,
-                    harness_name=harness_binary, gen_model=gen_model)
 
         redis_client = get_redis_client()
         fuzzer_dir = os.path.join(project_dir, harness_binary)
@@ -777,14 +745,10 @@ def run_codex_mode(
                 if is_done == b"done":
                     print(
                         f"[*] Harness {harness_binary} already processed. Skipping.")
-                    log_seedgen(task.task_id, "seedcodex_skipped_already_processed_harness",
-                                target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
                     return
                 else:
                     print(
                         f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
-                    log_seedgen(task.task_id, "seedcodex_started_reprocessing_incomplete_harness",
-                                target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
                     shutil.rmtree(fuzzer_dir)
             else:
                 shutil.rmtree(fuzzer_dir)
@@ -794,8 +758,6 @@ def run_codex_mode(
                                fuzzers[harness_binary], src_path,
                                gen_model)
         agent.run()
-        log_seedgen(task.task_id, "seedcodex_processed_harness",
-                    target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
 
         if save_result_func:
             save_result_func(
@@ -809,7 +771,7 @@ def run_codex_mode(
             )
             print(
                 f"[*] SeedCodex: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
-            log_seedgen(task.task_id, "seedcodex_stored_to_db", target=task.project_name,
+            log_seedgen(task.task_id, "generated_seeds_codex", target=task.project_name,
                         harness_name=harness_binary, gen_model=gen_model)
             redis_client = get_redis_client()
             if redis_client:
@@ -837,8 +799,6 @@ def run_codex_mode(
 
                 print(
                     f"[!] Harness '{harness_name}' failed with exception: {exc}")
-                log_seedgen(task.task_id, "seedcodex_harness_failed",
-                            target=task.project_name, harness_name=harness_name, gen_model=gen_model)
                 errors[harness_name] = exc
 
         if errors:
@@ -848,5 +808,3 @@ def run_codex_mode(
                 f"SeedCodex failed for {len(errors)} harness(es):\n{error_details}")
         print(
             f"[*] SeedCodex successfully executed on all harnesses with Generative Model {gen_model}")
-        log_seedgen(task.task_id, "seedcodex_finished",
-                    target=task.project_name, gen_model=gen_model)
