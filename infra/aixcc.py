@@ -471,8 +471,6 @@ def run_mcp_mode(
             return
         print(
             f"[*] Running SeedMCP for harness {harness_binary} with Generative Model {gen_model}")
-        log_seedgen(task.task_id, "seedmcp_started", target=task.project_name,
-                    harness_name=harness_binary, gen_model=gen_model)
 
         redis_client = get_redis_client()
         fuzzer_dir = os.path.join(project_dir, harness_binary)
@@ -483,14 +481,10 @@ def run_mcp_mode(
                 if is_done == b"done":
                     print(
                         f"[*] Harness {harness_binary} already processed. Skipping.")
-                    log_seedgen(task.task_id, "seedmcp_skipped_already_processed_harness",
-                                target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
                     return
                 else:
                     print(
                         f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
-                    log_seedgen(task.task_id, "seedmcp_started_reprocessing_incomplete_harness",
-                                target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
                     shutil.rmtree(fuzzer_dir)
             else:
                 shutil.rmtree(fuzzer_dir)
@@ -499,8 +493,8 @@ def run_mcp_mode(
         agent = SeedMcpAgent(fuzzer_dir, src_path, project_name, harness_binary,
                               fuzzers[harness_binary], gen_model)
         agent.run()
-        log_seedgen(task.task_id, "seedmcp_processed_harness",
-                    target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
+        # log_seedgen(task.task_id, "seedmcp_processed_harness",
+        #             target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
 
         if save_result_func:
             save_result_func(
@@ -514,7 +508,7 @@ def run_mcp_mode(
             )
             print(
                 f"[*] SeedMCP: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
-            log_seedgen(task.task_id, "seedmcp_stored_to_db", target=task.project_name,
+            log_seedgen(task.task_id, "generated_seeds_mcp", target=task.project_name,
                         harness_name=harness_binary, gen_model=gen_model)
             redis_client = get_redis_client()
             if redis_client:
@@ -542,8 +536,6 @@ def run_mcp_mode(
 
                 print(
                     f"[!] Harness '{harness_name}' failed with exception: {exc}")
-                log_seedgen(task.task_id, "seedmini_harness_failed",
-                            target=task.project_name, harness_name=harness_name, gen_model=gen_model)
                 errors[harness_name] = exc.with_traceback()
 
         if errors:
