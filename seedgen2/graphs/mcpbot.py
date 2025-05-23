@@ -47,6 +47,8 @@ class McpPrompts:
     *   If Abstract Syntax Tree (AST) analysis is deemed necessary for a comprehensive understanding of the input structure or control flow (e.g., to trace complex data dependencies or specific parsing logic), the relevant code/project must be registered with Treesitter (tools provided) prior to such analysis.*
     * use register_project_tools to register the project with Treesitter at first.
     * avoid using get_ast because it will consume too many tokens.
+    * pay more attention to the code that contains the string like "aixcc" and "jazzer".
+    * backdoor may be inserted in the code, so potential backdoor keywords should be noticed.
 
 3.  **Harness Interaction & Input Structure Deconstruction:**
     *   Analyze how the harness code processes its input data.
