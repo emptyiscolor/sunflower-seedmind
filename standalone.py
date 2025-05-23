@@ -10,6 +10,7 @@ from infra.aixcc import (
     load_project_config,
     print_project_info,
     run_mini_mode,
+    run_mcp_mode,
     run_full_mode
 )
 
@@ -34,10 +35,15 @@ def parse_args():
         action="store_true",
         help="Run seedgen in mini mode",
     )
+    parser.add_argument(
+        "--mcp",
+        action="store_true",
+        help="Run seedgen in MCP mode",
+    )
     return parser.parse_args()
 
 
-def build_and_run_targets(project_name, src_path, fuzz_tooling, mini=False):
+def build_and_run_targets(project_name, src_path, fuzz_tooling, mini=False, mcp_mode=False):
     os.makedirs(".tmp", exist_ok=True)
 
     project_yaml_path = validate_environment(fuzz_tooling, project_name)
@@ -56,10 +62,15 @@ def build_and_run_targets(project_name, src_path, fuzz_tooling, mini=False):
         diff=""
     )
 
-    if is_java or mini:
-        run_mini_mode(project_name, project_config, src_path, fuzz_tooling, task=mock_task)
+    if mcp_mode:
+        run_mcp_mode(project_name, project_config,
+                     src_path, fuzz_tooling, task=mock_task)
+    elif is_java or mini:
+        run_mini_mode(project_name, project_config,
+                      src_path, fuzz_tooling, task=mock_task)
     else:
-        run_full_mode(project_name, project_config, src_path, fuzz_tooling, task=mock_task)
+        run_full_mode(project_name, project_config,
+                      src_path, fuzz_tooling, task=mock_task)
 
 
 def main():
@@ -68,8 +79,9 @@ def main():
     src_path = args.src_path
     fuzz_tooling = args.fuzz_tooling
     mini = args.mini
+    mcp_mode = args.mcp
 
-    build_and_run_targets(project_name, src_path, fuzz_tooling, mini)
+    build_and_run_targets(project_name, src_path, fuzz_tooling, mini, mcp_mode)
 
 
 if __name__ == "__main__":

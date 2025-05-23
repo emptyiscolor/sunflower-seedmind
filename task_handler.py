@@ -20,6 +20,7 @@ from infra.aixcc import (
     print_project_info,
     run_mini_mode,
     run_full_mode,
+    run_mcp_mode,
     run_codex_mode
 )
 from utils.task import TaskData
@@ -152,8 +153,24 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
             database_url,
             storage_dir
         )
+        # enable MCP + react agent, conflict with codex
+        enable_mcp = os.getenv("ENABLE_MCP", False)
         enable_codex = os.getenv("ENABLE_CODEX", False)
-        if enable_codex:
+        if enable_mcp:
+            future_mcp = executor.submit(
+                run_mcp_mode,
+                task.project_name,
+                project_config,
+                os.path.join(task_dir, task.focus),
+                os.path.join(task_dir, fuzz_tooling_dir),
+                gen_model,
+                save_result_to_db,
+                task,
+                database_url,
+                storage_dir
+            )
+            future_list = [future_full, future_mini, future_mcp]
+        elif enable_codex:
             future_codex = executor.submit(
                 run_codex_mode,
                 task.project_name,

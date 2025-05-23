@@ -26,3 +26,4 @@ anthropic
 uv
 mcp-server-fetch
 mcp-server-tree-sitter
+langchain-mcp-adapters
