@@ -6,13 +6,13 @@ import shutil
 import re
 import stat
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from opentelemetry import trace, context
 
 from seedgen2.seedgen import SeedGenAgent
 from seedgen2.seedmini import SeedMiniAgent
 from seedgen2.seedcodex import SeedCodexAgent
 
 from utils.redis import get_redis_client
-from utils.telemetry import log_seedgen
 
 
 def validate_environment(root, project_name):
@@ -360,56 +360,74 @@ def run_mini_mode(
     print(
         f"[*] Running SeedMini on all fuzzers: {harness_binaries} with Generative Model {gen_model}")
 
-    def process_harness(harness_binary):
+    def process_harness(harness_binary, parent_context):
         if harness_binary not in fuzzers:
             return
-        print(
-            f"[*] Running SeedMini for harness {harness_binary} with Generative Model {gen_model}")
 
-        redis_client = get_redis_client()
-        fuzzer_dir = os.path.join(project_dir, harness_binary)
-        if os.path.exists(fuzzer_dir):
-            if redis_client:
-                is_done = redis_client.get(
-                    f"seedmini:{task.task_id}:{gen_model}:{harness_binary}")
-                if is_done == b"done":
-                    print(
-                        f"[*] Harness {harness_binary} already processed. Skipping.")
-                    return
-                else:
-                    print(
-                        f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
-                    shutil.rmtree(fuzzer_dir)
-            else:
-                shutil.rmtree(fuzzer_dir)
-        os.makedirs(fuzzer_dir, exist_ok=True)
+        token = context.attach(parent_context)
+        try:
+            with trace.get_tracer(__name__).start_as_current_span(
+                f"generate for harness {harness_binary}",
+                attributes={"crs.action.target.harness": harness_binary}
+            ):
+                print(
+                    f"[*] Running SeedMini for harness {harness_binary} with Generative Model {gen_model}")
 
-        agent = SeedMiniAgent(fuzzer_dir, project_name, harness_binary,
-                              fuzzers[harness_binary], gen_model)
-        agent.run()
+                redis_client = get_redis_client()
+                fuzzer_dir = os.path.join(project_dir, harness_binary)
+                if os.path.exists(fuzzer_dir):
+                    if redis_client:
+                        is_done = redis_client.get(
+                            f"seedmini:{task.task_id}:{gen_model}:{harness_binary}")
+                        if is_done == b"done":
+                            print(
+                                f"[*] Harness {harness_binary} already processed. Skipping.")
+                            return
+                        else:
+                            print(
+                                f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
+                            shutil.rmtree(fuzzer_dir)
+                    else:
+                        shutil.rmtree(fuzzer_dir)
+                os.makedirs(fuzzer_dir, exist_ok=True)
 
-        if save_result_func:
-            save_result_func(
-                database_url,
-                storage_dir,
-                task,
-                harness_binary,
-                os.path.join(fuzzer_dir, "seeds"),
-                "seedmini",
-                gen_model
-            )
-            print(
-                f"[*] SeedMini: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
-            log_seedgen(task.task_id, "generated_seeds_mini", target=task.project_name,
-                        harness_name=harness_binary, gen_model=gen_model)
-            redis_client = get_redis_client()
-            if redis_client:
-                redis_client.set(
-                    f"seedmini:{task.task_id}:{gen_model}:{harness_binary}", "done")
+                with trace.get_tracer(__name__).start_as_current_span(
+                    f"run seedmini agent",
+                    attributes={"crs.action.target.harness": harness_binary}
+                ):
+                    agent = SeedMiniAgent(fuzzer_dir, project_name, harness_binary,
+                                          fuzzers[harness_binary], gen_model)
+                    agent.run()
+
+                if save_result_func:
+                    with trace.get_tracer(__name__).start_as_current_span(
+                        f"save to database",
+                        attributes={
+                            "crs.action.target.harness": harness_binary}
+                    ):
+                        save_result_func(
+                            database_url,
+                            storage_dir,
+                            task,
+                            harness_binary,
+                            os.path.join(fuzzer_dir, "seeds"),
+                            "seedmini",
+                            gen_model
+                        )
+                        print(
+                            f"[*] SeedMini: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
+                        # log_seedgen(task.task_id, "generated_seeds_mini", target=task.project_name,
+                        #             harness_name=harness_binary, gen_model=gen_model)
+                        redis_client = get_redis_client()
+                        if redis_client:
+                            redis_client.set(
+                                f"seedmini:{task.task_id}:{gen_model}:{harness_binary}", "done")
+        finally:
+            context.detach(token)
 
     # Create a thread pool to parallelize the SeedMini execution per harness
     with ThreadPoolExecutor(max_workers=len(harness_binaries) or None) as executor:
-        futures = [executor.submit(process_harness, hb)
+        futures = [executor.submit(process_harness, hb, context.get_current())
                    for hb in harness_binaries]
 
         # Wait for all tasks to complete and handle any exceptions
@@ -457,13 +475,17 @@ def run_full_mode(
         return
 
     # Compile the project
-    print(f"[*] Building project for seedgen: {project_name}")
-    try:
-        image_name, fuzzers = compile_project(
-            fuzz_tooling, project_name, project_config, src_path)
-    except Exception as e:
-        print(f"[!] Error occurred when building {project_name}:", e)
-        raise
+    with trace.get_tracer(__name__).start_as_current_span(
+        f"build project",
+        attributes={"crs.action.target": project_name}
+    ):
+        print(f"[*] Building project for seedgen: {project_name}")
+        try:
+            image_name, fuzzers = compile_project(
+                fuzz_tooling, project_name, project_config, src_path)
+        except Exception as e:
+            print(f"[!] Error occurred when building {project_name}:", e)
+            raise
 
     project_dir = os.path.abspath(os.path.join(
         ".tmp", "tasks", task.task_id, gen_model, "seedgen", project_name))
@@ -484,78 +506,101 @@ def run_full_mode(
         f"[*] Running seedgen on all fuzzers: {fuzzers} with Generative Model {gen_model}")
     harness_binaries = fuzzers
 
-    def process_harness(harness_binary):
+    def process_harness(harness_binary, parent_context):
         if harness_binary not in fuzzers:
             return
-        print(
-            f"[*] Running Seedgen for harness {harness_binary} with Generative Model {gen_model}")
+
+        token = context.attach(parent_context)
         try:
-            # Start the daemon
-            container_id = run_project(
-                project_dir, fuzz_tooling, image_name, project_name, src_path)
-            redis_client = get_redis_client()
-            fuzzer_dir = os.path.join(project_dir, harness_binary)
-            if os.path.exists(fuzzer_dir):
-                if redis_client:
-                    is_done = redis_client.get(
-                        f"seedgen:{task.task_id}:{gen_model}:{harness_binary}")
-                    if is_done == b"done":
-                        print(
-                            f"[*] Harness {harness_binary} already processed. Skipping.")
-                        return
-                    else:
-                        print(
-                            f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
-                        shutil.rmtree(fuzzer_dir)
-                else:
-                    shutil.rmtree(fuzzer_dir)
-            os.makedirs(fuzzer_dir, exist_ok=True)
+            with trace.get_tracer(__name__).start_as_current_span(
+                f"generate for harness {harness_binary}",
+                attributes={"crs.action.target.harness": harness_binary}
+            ):
+                print(
+                    f"[*] Running Seedgen for harness {harness_binary} with Generative Model {gen_model}")
+                try:
+                    # Start the daemon
+                    container_id = run_project(
+                        project_dir, fuzz_tooling, image_name, project_name, src_path)
+                    redis_client = get_redis_client()
+                    fuzzer_dir = os.path.join(project_dir, harness_binary)
+                    if os.path.exists(fuzzer_dir):
+                        if redis_client:
+                            is_done = redis_client.get(
+                                f"seedgen:{task.task_id}:{gen_model}:{harness_binary}")
+                            if is_done == b"done":
+                                print(
+                                    f"[*] Harness {harness_binary} already processed. Skipping.")
+                                return
+                            else:
+                                print(
+                                    f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
+                                shutil.rmtree(fuzzer_dir)
+                        else:
+                            shutil.rmtree(fuzzer_dir)
+                    os.makedirs(fuzzer_dir, exist_ok=True)
 
-            shutil.copytree(os.path.join(project_dir, "out"), os.path.join(
-                fuzzer_dir, "out"), dirs_exist_ok=True)
-            shutil.copytree(os.path.join(project_dir, "work"), os.path.join(
-                fuzzer_dir, "work"), dirs_exist_ok=True)
-            # get ip address of the seedd container, the container id is container_id
-            ip_addr = subprocess.check_output(
-                ["docker", "inspect", "-f", "{{.NetworkSettings.IPAddress}}", container_id]).decode().strip()
-            agent = SeedGenAgent(fuzzer_dir, ip_addr,
-                                 project_name, harness_binary, gen_model)
-            agent.run()
-        except Exception as e:
-            print("Error occurred during full mode:", e)
-            if "container_id" in locals():
-                print(f"[-] Stopping container {container_id}")
-                subprocess.run(["docker", "stop", container_id], check=True)
-                subprocess.run(["docker", "rm", container_id], check=True)
-            raise
+                    shutil.copytree(os.path.join(project_dir, "out"), os.path.join(
+                        fuzzer_dir, "out"), dirs_exist_ok=True)
+                    shutil.copytree(os.path.join(project_dir, "work"), os.path.join(
+                        fuzzer_dir, "work"), dirs_exist_ok=True)
+                    # get ip address of the seedd container, the container id is container_id
+                    with trace.get_tracer(__name__).start_as_current_span(
+                        f"run seedgen agent",
+                        attributes={
+                            "crs.action.target.harness": harness_binary}
+                    ):
+                        ip_addr = subprocess.check_output(
+                            ["docker", "inspect", "-f", "{{.NetworkSettings.IPAddress}}", container_id]).decode().strip()
+                        agent = SeedGenAgent(fuzzer_dir, ip_addr,
+                                             project_name, harness_binary, gen_model)
+                        agent.run()
+                except Exception as e:
+                    print("Error occurred during full mode:", e)
+                    if "container_id" in locals():
+                        print(f"[-] Stopping container {container_id}")
+                        subprocess.run(
+                            ["docker", "stop", container_id], check=True)
+                        subprocess.run(
+                            ["docker", "rm", container_id], check=True)
+                    raise
+                finally:
+                    if "container_id" in locals():
+                        print(f"[-] Stopping container {container_id}")
+                        subprocess.run(
+                            ["docker", "stop", container_id], check=True)
+                        subprocess.run(
+                            ["docker", "rm", container_id], check=True)
+
+                if save_result_func:
+                    with trace.get_tracer(__name__).start_as_current_span(
+                        f"save to database",
+                        attributes={
+                            "crs.action.target.harness": harness_binary}
+                    ):
+                        save_result_func(
+                            database_url,
+                            storage_dir,
+                            task,
+                            harness_binary,
+                            os.path.join(fuzzer_dir, "seeds"),
+                            "seedgen",
+                            gen_model
+                        )
+                        print(
+                            f"[*] Seedgen: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
+                        # log_seedgen(task.task_id, "generated_seeds_full",
+                        #             target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
+                        redis_client = get_redis_client()
+                        if redis_client:
+                            redis_client.set(
+                                f"seedgen:{task.task_id}:{gen_model}:{harness_binary}", "done")
         finally:
-            if "container_id" in locals():
-                print(f"[-] Stopping container {container_id}")
-                subprocess.run(["docker", "stop", container_id], check=True)
-                subprocess.run(["docker", "rm", container_id], check=True)
-
-        if save_result_func:
-            save_result_func(
-                database_url,
-                storage_dir,
-                task,
-                harness_binary,
-                os.path.join(fuzzer_dir, "seeds"),
-                "seedgen",
-                gen_model
-            )
-            print(
-                f"[*] Seedgen: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
-            log_seedgen(task.task_id, "generated_seeds_full",
-                        target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
-            redis_client = get_redis_client()
-            if redis_client:
-                redis_client.set(
-                    f"seedgen:{task.task_id}:{gen_model}:{harness_binary}", "done")
+            context.detach(token)
 
     # Create a thread pool to parallelize the Seedgen execution per harness
     with ThreadPoolExecutor(max_workers=len(harness_binaries) or None) as executor:
-        futures = [executor.submit(process_harness, hb)
+        futures = [executor.submit(process_harness, hb, context.get_current())
                    for hb in harness_binaries]
 
         # Wait for all tasks to complete and handle any exceptions
@@ -614,57 +659,75 @@ def run_codex_mode(
     print(
         f"[*] Running SeedCodex on all fuzzers: {harness_binaries} with Generative Model {gen_model}")
 
-    def process_harness(harness_binary):
+    def process_harness(harness_binary, parent_context):
         if harness_binary not in fuzzers:
             return
-        print(
-            f"[*] Running SeedCodex for harness {harness_binary} with Generative Model {gen_model}")
 
-        redis_client = get_redis_client()
-        fuzzer_dir = os.path.join(project_dir, harness_binary)
-        if os.path.exists(fuzzer_dir):
-            if redis_client:
-                is_done = redis_client.get(
-                    f"seedcodex:{task.task_id}:{gen_model}:{harness_binary}")
-                if is_done == b"done":
-                    print(
-                        f"[*] Harness {harness_binary} already processed. Skipping.")
-                    return
-                else:
-                    print(
-                        f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
-                    shutil.rmtree(fuzzer_dir)
-            else:
-                shutil.rmtree(fuzzer_dir)
-        os.makedirs(fuzzer_dir, exist_ok=True)
+        token = context.attach(parent_context)
+        try:
+            with trace.get_tracer(__name__).start_as_current_span(
+                f"generate for harness {harness_binary}",
+                attributes={"crs.action.target.harness": harness_binary}
+            ):
+                print(
+                    f"[*] Running SeedCodex for harness {harness_binary} with Generative Model {gen_model}")
 
-        agent = SeedCodexAgent(fuzzer_dir, project_name, harness_binary,
-                               fuzzers[harness_binary], src_path,
-                               gen_model)
-        agent.run()
+                redis_client = get_redis_client()
+                fuzzer_dir = os.path.join(project_dir, harness_binary)
+                if os.path.exists(fuzzer_dir):
+                    if redis_client:
+                        is_done = redis_client.get(
+                            f"seedcodex:{task.task_id}:{gen_model}:{harness_binary}")
+                        if is_done == b"done":
+                            print(
+                                f"[*] Harness {harness_binary} already processed. Skipping.")
+                            return
+                        else:
+                            print(
+                                f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
+                            shutil.rmtree(fuzzer_dir)
+                    else:
+                        shutil.rmtree(fuzzer_dir)
+                os.makedirs(fuzzer_dir, exist_ok=True)
 
-        if save_result_func:
-            save_result_func(
-                database_url,
-                storage_dir,
-                task,
-                harness_binary,
-                os.path.join(fuzzer_dir, "seeds"),
-                "seedcodex",
-                gen_model
-            )
-            print(
-                f"[*] SeedCodex: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
-            log_seedgen(task.task_id, "generated_seeds_codex", target=task.project_name,
-                        harness_name=harness_binary, gen_model=gen_model)
-            redis_client = get_redis_client()
-            if redis_client:
-                redis_client.set(
-                    f"seedcodex:{task.task_id}:{gen_model}:{harness_binary}", "done")
+                with trace.get_tracer(__name__).start_as_current_span(
+                    f"run seedcodex agent",
+                    attributes={"crs.action.target.harness": harness_binary}
+                ):
+                    agent = SeedCodexAgent(fuzzer_dir, project_name, harness_binary,
+                                           fuzzers[harness_binary], src_path,
+                                           gen_model)
+                    agent.run()
+
+                if save_result_func:
+                    with trace.get_tracer(__name__).start_as_current_span(
+                        f"save to database",
+                        attributes={
+                            "crs.action.target.harness": harness_binary}
+                    ):
+                        save_result_func(
+                            database_url,
+                            storage_dir,
+                            task,
+                            harness_binary,
+                            os.path.join(fuzzer_dir, "seeds"),
+                            "seedcodex",
+                            gen_model
+                        )
+                        print(
+                            f"[*] SeedCodex: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
+                        # log_seedgen(task.task_id, "generated_seeds_codex", target=task.project_name,
+                        #             harness_name=harness_binary, gen_model=gen_model)
+                        redis_client = get_redis_client()
+                        if redis_client:
+                            redis_client.set(
+                                f"seedcodex:{task.task_id}:{gen_model}:{harness_binary}", "done")
+        finally:
+            context.detach(token)
 
     # Create a thread pool to parallelize the SeedMini execution per harness
     with ThreadPoolExecutor(max_workers=len(harness_binaries) or None) as executor:
-        futures = [executor.submit(process_harness, hb)
+        futures = [executor.submit(process_harness, hb, context.get_current())
                    for hb in harness_binaries]
 
         # Wait for all tasks to complete and handle any exceptions
