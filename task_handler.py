@@ -191,7 +191,8 @@ def save_result_to_db(
     seed_type: str,
     gen_model: str,
     coverage: float = 0,
-    metric: str = ""
+    metric: str = "",
+    send_to_cmin: bool = True
 ):
     """
     Save Seedgen/SeedMini result for a harness to a DB pointed to by database_url,
@@ -222,11 +223,13 @@ def save_result_to_db(
         db_session.add(new_seed_record)
         db_session.commit()
 
-        # Also send seeds to cmin_queue
-        connection = pika.BlockingConnection(
-            pika.URLParameters(rabbitmq_host)
-        )
-        send_to_cmin_queue(connection, task, harness_binary, seed_tar_gz_path)
+        # Also send seeds to cmin_queue if the project is not java
+        if send_to_cmin:
+            connection = pika.BlockingConnection(
+                pika.URLParameters(rabbitmq_host)
+            )
+            send_to_cmin_queue(
+                connection, task, harness_binary, seed_tar_gz_path)
 
     except Exception as e:
         db_session.rollback()
