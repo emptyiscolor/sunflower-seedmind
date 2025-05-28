@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from opentelemetry import trace, context
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 import pika
 
@@ -24,7 +25,7 @@ from infra.aixcc import (
     run_codex_mode
 )
 from utils.task import TaskData
-from utils.telemetry import init_opentelemetry, start_span_with_crs_inheritance
+from utils.telemetry import init_opentelemetry, get_task_span, start_span_with_crs_inheritance
 from utils.redis import init_redis
 import utils.db as db
 
@@ -314,86 +315,99 @@ def listen_for_tasks(
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
     def process_task(connection, ch, method, properties, body, task, gen_model_list):
-        # Retrieve the current retry count from message headers.
-        retry_count = 0
-        if properties.headers and "x-retry" in properties.headers:
-            retry_count = properties.headers["x-retry"]
-        with start_span_with_crs_inheritance(
-            f"attempt #{retry_count+1}",
-            attributes={
-                "crs.action.category": "input_generation",
-                "crs.action.name": "generate_fuzzing_seeds",
-                "crs.action.target": task.project_name
-            }
-        ) as process_span:
-            # Save the current context to propagate to threads
-            parent_context = context.get_current()
-            try:
-                # Use ThreadPoolExecutor to run seedgen for all models in parallel
-                with ThreadPoolExecutor(max_workers=len(gen_model_list)) as executor:
-                    futures = []
-                    for gen_model in gen_model_list:
-                        future = executor.submit(
-                            run_seedgen_with_span, task, database_url, storage_dir, gen_model, parent_context)
-                        futures.append((future, gen_model))
+        # Retrieve global task span from redis
+        payload = get_task_span(task.task_id)
+        if payload:
+            propagator = TraceContextTextMapPropagator()
+            parent_context = propagator.extract(payload)
+            token = context.attach(parent_context)
+        else:
+            token = None
 
-                    # Wait for all futures to complete and handle any exceptions
-                    errors = []
-                    for future, gen_model in futures:
-                        try:
-                            future.result()
-                            print(
-                                f"[*] Seedgen workflow finished for task {task.task_id} with Generative Model {gen_model}")
-                        except Exception as e:
-                            print(
-                                f"[!] Error processing task {task.task_id} with model {gen_model}: {e}")
-                            errors.append((gen_model, e))
+        try:
+            # Retrieve the current retry count from message headers.
+            retry_count = 0
+            if properties.headers and "x-retry" in properties.headers:
+                retry_count = properties.headers["x-retry"]
+            with start_span_with_crs_inheritance(
+                f"attempt #{retry_count+1}",
+                attributes={
+                    "crs.action.category": "input_generation",
+                    "crs.action.name": "generate_fuzzing_seeds",
+                    "crs.action.target": task.project_name
+                }
+            ) as process_span:
+                # Save the current context to propagate to threads
+                parent_context = context.get_current()
+                try:
+                    # Use ThreadPoolExecutor to run seedgen for all models in parallel
+                    with ThreadPoolExecutor(max_workers=len(gen_model_list)) as executor:
+                        futures = []
+                        for gen_model in gen_model_list:
+                            future = executor.submit(
+                                run_seedgen_with_span, task, database_url, storage_dir, gen_model, parent_context)
+                            futures.append((future, gen_model))
 
-                    if errors:
-                        error_msg = "; ".join(
-                            [f"{model}: {err}" for model, err in errors])
-                        raise Exception(
-                            f"Seedgen failed for some models: {error_msg}")
+                        # Wait for all futures to complete and handle any exceptions
+                        errors = []
+                        for future, gen_model in futures:
+                            try:
+                                future.result()
+                                print(
+                                    f"[*] Seedgen workflow finished for task {task.task_id} with Generative Model {gen_model}")
+                            except Exception as e:
+                                print(
+                                    f"[!] Error processing task {task.task_id} with model {gen_model}: {e}")
+                                errors.append((gen_model, e))
 
-                print(
-                    f"[*] Seedgen workflow finished for task {task.task_id} for all models")
-                cb = functools.partial(
-                    ack_nack_message, ch, method.delivery_tag)
-                connection.add_callback_threadsafe(cb)
-            except Exception as e:
-                print(f"[!] Error processing task {task.task_id}: {e}")
-                print(traceback.format_exc())
+                        if errors:
+                            error_msg = "; ".join(
+                                [f"{model}: {err}" for model, err in errors])
+                            raise Exception(
+                                f"Seedgen failed for some models: {error_msg}")
 
-                # Retrieve the current retry count from message headers.
-                retry_count = 0
-                if properties.headers and "x-retry" in properties.headers:
-                    retry_count = properties.headers["x-retry"]
-
-                if retry_count < 3:
-                    new_retry = retry_count + 1
                     print(
-                        f"[!] Requeuing task {task.task_id}, attempt {new_retry}")
-                    # Create updated headers with the new retry count.
-                    new_headers = properties.headers.copy() if properties.headers else {}
-                    new_headers["x-retry"] = new_retry
-                    new_props = pika.BasicProperties(headers=new_headers)
-                    # Republish to the same queue (using queue_name from the parent scope)
-                    connection.add_callback_threadsafe(
-                        lambda: ch.basic_publish(
-                            exchange="",
-                            routing_key=queue_name,
-                            body=body,
-                            properties=new_props
+                        f"[*] Seedgen workflow finished for task {task.task_id} for all models")
+                    cb = functools.partial(
+                        ack_nack_message, ch, method.delivery_tag)
+                    connection.add_callback_threadsafe(cb)
+                except Exception as e:
+                    print(f"[!] Error processing task {task.task_id}: {e}")
+                    print(traceback.format_exc())
+
+                    # Retrieve the current retry count from message headers.
+                    retry_count = 0
+                    if properties.headers and "x-retry" in properties.headers:
+                        retry_count = properties.headers["x-retry"]
+
+                    if retry_count < 3:
+                        new_retry = retry_count + 1
+                        print(
+                            f"[!] Requeuing task {task.task_id}, attempt {new_retry}")
+                        # Create updated headers with the new retry count.
+                        new_headers = properties.headers.copy() if properties.headers else {}
+                        new_headers["x-retry"] = new_retry
+                        new_props = pika.BasicProperties(headers=new_headers)
+                        # Republish to the same queue (using queue_name from the parent scope)
+                        connection.add_callback_threadsafe(
+                            lambda: ch.basic_publish(
+                                exchange="",
+                                routing_key=queue_name,
+                                body=body,
+                                properties=new_props
+                            )
                         )
-                    )
-                else:
-                    print(
-                        f"[!] Task {task.task_id} failed after {retry_count} attempts. Not requeuing.")
+                    else:
+                        print(
+                            f"[!] Task {task.task_id} failed after {retry_count} attempts. Not requeuing.")
 
-                # In any case, acknowledge the original message so it is removed from the queue.
-                connection.add_callback_threadsafe(
-                    lambda: ack_nack_message(ch, method.delivery_tag)
-                )
+                    # In any case, acknowledge the original message so it is removed from the queue.
+                    connection.add_callback_threadsafe(
+                        lambda: ack_nack_message(ch, method.delivery_tag)
+                    )
+        finally:
+            if token:
+                context.detach(token)
 
     def ack_nack_message(channel, delivery_tag, nack=False):
         if channel.is_open:

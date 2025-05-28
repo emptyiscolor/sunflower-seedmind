@@ -59,6 +59,16 @@ def get_task_metadata(task_id: str):
     }
 
 
+def get_task_span(task_id: str):
+    redis_client = get_redis_client()
+    if redis_client:
+        task_span = redis_client.get(f"global:trace_context:{task_id}")
+        if task_span:
+            return task_span
+
+    return None
+
+
 def propagate_crs_attributes_to_child(child_span, parent_span):
     """
     Propagate all attributes with the 'crs.' prefix from parent_span to child_span,
