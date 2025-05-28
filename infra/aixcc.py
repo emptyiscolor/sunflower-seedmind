@@ -410,7 +410,8 @@ def run_mini_mode(
                             harness_binary,
                             os.path.join(fuzzer_dir, "seeds"),
                             "seedmini",
-                            gen_model
+                            gen_model,
+                            send_to_cmin=not is_java
                         )
                         print(
                             f"[*] SeedMini: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
@@ -578,7 +579,8 @@ def run_full_mode(
                             harness_binary,
                             os.path.join(fuzzer_dir, "seeds"),
                             "seedgen",
-                            gen_model
+                            gen_model,
+                            send_to_cmin=not is_java
                         )
                         print(
                             f"[*] Seedgen: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
@@ -702,7 +704,8 @@ def run_codex_mode(
                             harness_binary,
                             os.path.join(fuzzer_dir, "seeds"),
                             "seedcodex",
-                            gen_model
+                            gen_model,
+                            send_to_cmin=not is_java
                         )
                         print(
                             f"[*] SeedCodex: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
