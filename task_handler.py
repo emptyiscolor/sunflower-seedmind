@@ -24,7 +24,7 @@ from infra.aixcc import (
     run_codex_mode
 )
 from utils.task import TaskData
-from utils.telemetry import init_opentelemetry
+from utils.telemetry import init_opentelemetry, start_span_with_crs_inheritance
 from utils.redis import init_redis
 import utils.db as db
 
@@ -130,7 +130,7 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
     def run_mode_with_span(mode_func, mode_name, *args, parent_context, **kwargs):
         token = context.attach(parent_context)
         try:
-            with trace.get_tracer(__name__).start_as_current_span(
+            with start_span_with_crs_inheritance(
                 f"generate in {mode_name} mode",
                 attributes={"crs.action.mode": mode_name}
             ) as mode_span:
@@ -201,7 +201,7 @@ def run_seedgen_with_span(task, database_url, storage_dir, gen_model, parent_con
     # Activate the parent context in this thread
     token = context.attach(parent_context)
     try:
-        with trace.get_tracer(__name__).start_as_current_span(
+        with start_span_with_crs_inheritance(
             f"generate with {gen_model}",
             attributes={"crs.action.model": gen_model}
         ) as gen_model_span:
@@ -318,7 +318,7 @@ def listen_for_tasks(
         retry_count = 0
         if properties.headers and "x-retry" in properties.headers:
             retry_count = properties.headers["x-retry"]
-        with trace.get_tracer(__name__).start_as_current_span(
+        with start_span_with_crs_inheritance(
             f"attempt #{retry_count+1}",
             attributes={
                 "crs.action.category": "input_generation",

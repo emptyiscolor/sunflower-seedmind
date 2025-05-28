@@ -13,6 +13,7 @@ from seedgen2.seedmini import SeedMiniAgent
 from seedgen2.seedcodex import SeedCodexAgent
 
 from utils.redis import get_redis_client
+from utils.telemetry import start_span_with_crs_inheritance
 
 
 def validate_environment(root, project_name):
@@ -366,7 +367,7 @@ def run_mini_mode(
 
         token = context.attach(parent_context)
         try:
-            with trace.get_tracer(__name__).start_as_current_span(
+            with start_span_with_crs_inheritance(
                 f"generate for harness {harness_binary}",
                 attributes={"crs.action.target.harness": harness_binary}
             ):
@@ -391,19 +392,16 @@ def run_mini_mode(
                         shutil.rmtree(fuzzer_dir)
                 os.makedirs(fuzzer_dir, exist_ok=True)
 
-                with trace.get_tracer(__name__).start_as_current_span(
-                    f"run seedmini agent",
-                    attributes={"crs.action.target.harness": harness_binary}
+                with start_span_with_crs_inheritance(
+                    f"run seedmini agent"
                 ):
                     agent = SeedMiniAgent(fuzzer_dir, project_name, harness_binary,
                                           fuzzers[harness_binary], gen_model)
                     agent.run()
 
                 if save_result_func:
-                    with trace.get_tracer(__name__).start_as_current_span(
-                        f"save to database",
-                        attributes={
-                            "crs.action.target.harness": harness_binary}
+                    with start_span_with_crs_inheritance(
+                        f"save to database"
                     ):
                         save_result_func(
                             database_url,
@@ -475,9 +473,8 @@ def run_full_mode(
         return
 
     # Compile the project
-    with trace.get_tracer(__name__).start_as_current_span(
-        f"build project",
-        attributes={"crs.action.target": project_name}
+    with start_span_with_crs_inheritance(
+        f"build project"
     ):
         print(f"[*] Building project for seedgen: {project_name}")
         try:
@@ -512,7 +509,7 @@ def run_full_mode(
 
         token = context.attach(parent_context)
         try:
-            with trace.get_tracer(__name__).start_as_current_span(
+            with start_span_with_crs_inheritance(
                 f"generate for harness {harness_binary}",
                 attributes={"crs.action.target.harness": harness_binary}
             ):
@@ -545,10 +542,8 @@ def run_full_mode(
                     shutil.copytree(os.path.join(project_dir, "work"), os.path.join(
                         fuzzer_dir, "work"), dirs_exist_ok=True)
                     # get ip address of the seedd container, the container id is container_id
-                    with trace.get_tracer(__name__).start_as_current_span(
-                        f"run seedgen agent",
-                        attributes={
-                            "crs.action.target.harness": harness_binary}
+                    with start_span_with_crs_inheritance(
+                        f"run seedgen agent"
                     ):
                         ip_addr = subprocess.check_output(
                             ["docker", "inspect", "-f", "{{.NetworkSettings.IPAddress}}", container_id]).decode().strip()
@@ -573,10 +568,8 @@ def run_full_mode(
                             ["docker", "rm", container_id], check=True)
 
                 if save_result_func:
-                    with trace.get_tracer(__name__).start_as_current_span(
-                        f"save to database",
-                        attributes={
-                            "crs.action.target.harness": harness_binary}
+                    with start_span_with_crs_inheritance(
+                        f"save to database"
                     ):
                         save_result_func(
                             database_url,
@@ -665,7 +658,7 @@ def run_codex_mode(
 
         token = context.attach(parent_context)
         try:
-            with trace.get_tracer(__name__).start_as_current_span(
+            with start_span_with_crs_inheritance(
                 f"generate for harness {harness_binary}",
                 attributes={"crs.action.target.harness": harness_binary}
             ):
@@ -690,9 +683,8 @@ def run_codex_mode(
                         shutil.rmtree(fuzzer_dir)
                 os.makedirs(fuzzer_dir, exist_ok=True)
 
-                with trace.get_tracer(__name__).start_as_current_span(
-                    f"run seedcodex agent",
-                    attributes={"crs.action.target.harness": harness_binary}
+                with start_span_with_crs_inheritance(
+                    f"run seedcodex agent"
                 ):
                     agent = SeedCodexAgent(fuzzer_dir, project_name, harness_binary,
                                            fuzzers[harness_binary], src_path,
@@ -700,10 +692,8 @@ def run_codex_mode(
                     agent.run()
 
                 if save_result_func:
-                    with trace.get_tracer(__name__).start_as_current_span(
-                        f"save to database",
-                        attributes={
-                            "crs.action.target.harness": harness_binary}
+                    with start_span_with_crs_inheritance(
+                        f"save to database"
                     ):
                         save_result_func(
                             database_url,
