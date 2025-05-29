@@ -553,12 +553,6 @@ def run_full_mode(
                         agent.run()
                 except Exception as e:
                     print("Error occurred during full mode:", e)
-                    if "container_id" in locals():
-                        print(f"[-] Stopping container {container_id}")
-                        subprocess.run(
-                            ["docker", "stop", container_id], check=True)
-                        subprocess.run(
-                            ["docker", "rm", container_id], check=True)
                     raise
                 finally:
                     if "container_id" in locals():
