@@ -11,6 +11,8 @@ import functools
 from dataclasses import dataclass
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from opentelemetry import trace, context
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 import pika
 
@@ -24,7 +26,7 @@ from infra.aixcc import (
     run_codex_mode
 )
 from utils.task import TaskData
-from utils.telemetry import init_opentelemetry
+from utils.telemetry import init_opentelemetry, get_task_span, start_span_with_crs_inheritance
 from utils.redis import init_redis
 import utils.db as db
 
@@ -127,10 +129,21 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
     project_config = load_project_config(project_yaml_path)
     print_project_info(task.project_name, project_config)
 
+    def run_mode_with_span(mode_func, mode_name, *args, parent_context, **kwargs):
+        token = context.attach(parent_context)
+        try:
+            with start_span_with_crs_inheritance(
+                f"generate in {mode_name} mode",
+                attributes={"crs.action.mode": mode_name}
+            ) as mode_span:
+                return mode_func(*args, **kwargs)
+        finally:
+            context.detach(token)
+
     # Run SeedMini and SeedGen in parallel using a thread pool
     with ThreadPoolExecutor(max_workers=2) as executor:
         future_mini = executor.submit(
-            run_mini_mode,
+            run_mode_with_span, run_mini_mode, "mini",
             task.project_name,
             project_config,
             os.path.join(task_dir, task.focus),
@@ -139,10 +152,11 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
             save_result_to_db,
             task,
             database_url,
-            storage_dir
+            storage_dir,
+            parent_context=context.get_current()
         )
         future_full = executor.submit(
-            run_full_mode,
+            run_mode_with_span, run_full_mode, "full",
             task.project_name,
             project_config,
             os.path.join(task_dir, task.focus),
@@ -151,14 +165,15 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
             save_result_to_db,
             task,
             database_url,
-            storage_dir
+            storage_dir,
+            parent_context=context.get_current()
         )
         # enable MCP + react agent, conflict with codex
         enable_mcp = os.getenv("ENABLE_MCP", False)
         enable_codex = os.getenv("ENABLE_CODEX", False)
         if enable_mcp:
             future_mcp = executor.submit(
-                run_mcp_mode,
+                run_mode_with_span, run_mcp_mode, "mcp",
                 task.project_name,
                 project_config,
                 os.path.join(task_dir, task.focus),
@@ -167,12 +182,13 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
                 save_result_to_db,
                 task,
                 database_url,
-                storage_dir
+                storage_dir,
+                parent_context=context.get_current()
             )
             future_list = [future_full, future_mini, future_mcp]
         elif enable_codex:
             future_codex = executor.submit(
-                run_codex_mode,
+                run_mode_with_span, run_codex_mode, "codex",
                 task.project_name,
                 project_config,
                 os.path.join(task_dir, task.focus),
@@ -181,7 +197,8 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
                 save_result_to_db,
                 task,
                 database_url,
-                storage_dir
+                storage_dir,
+                parent_context=context.get_current()
             )
             future_list = [future_full, future_mini, future_codex]
         else:
@@ -199,6 +216,21 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
             raise Exception("One or more harnesses failed")
 
 
+def run_seedgen_with_span(task, database_url, storage_dir, gen_model, parent_context):
+    # Activate the parent context in this thread
+    token = context.attach(parent_context)
+    try:
+        with start_span_with_crs_inheritance(
+            f"generate with {gen_model}",
+            attributes={"crs.action.model": gen_model}
+        ) as gen_model_span:
+            # Call the actual function, passing the span/context if needed
+            run_seedgen_for_task(task, database_url,
+                                 storage_dir, gen_model)
+    finally:
+        context.detach(token)
+
+
 def save_result_to_db(
     database_url: str,
     storage_dir: str,
@@ -208,7 +240,8 @@ def save_result_to_db(
     seed_type: str,
     gen_model: str,
     coverage: float = 0,
-    metric: str = ""
+    metric: str = "",
+    send_to_cmin: bool = True
 ):
     """
     Save Seedgen/SeedMini result for a harness to a DB pointed to by database_url,
@@ -238,12 +271,59 @@ def save_result_to_db(
         )
         db_session.add(new_seed_record)
         db_session.commit()
+
+        # Also send seeds to cmin_queue if the project is not java
+        if send_to_cmin:
+            connection = pika.BlockingConnection(
+                pika.URLParameters(rabbitmq_host)
+            )
+            send_to_cmin_queue(
+                connection, task, harness_binary, seed_tar_gz_path)
     except Exception as e:
         db_session.rollback()
         print("Error occurred:", e)
         raise
     finally:
         db_session.close()
+
+
+def send_to_cmin_queue(
+    connection: pika.BlockingConnection,
+    task: TaskData,
+    harness_name: str,
+    seed_path: str
+):
+    try:
+        channel = connection.channel()
+
+        # Declare the queue with priority support
+        channel.queue_declare(
+            queue="cmin_queue",
+            durable=True
+        )
+
+        # Create the message
+        message = json.dumps({
+            "task_id": task.task_id,
+            "harness": harness_name,
+            "seeds": seed_path
+        })
+
+        # Publish the message with the specified priority
+        channel.basic_publish(
+            exchange="",
+            routing_key="cmin_queue",
+            body=message,
+            properties=pika.BasicProperties(
+                delivery_mode=2
+            )
+        )
+
+        print(
+            f"[*] Sent seed {seed_path} to cmin_queue")
+
+    except Exception as e:
+        print(f"[!] Failed to send to cmin_queue: {e}")
 
 
 def listen_for_tasks(
@@ -301,71 +381,98 @@ def listen_for_tasks(
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
     def process_task(connection, ch, method, properties, body, task, gen_model_list):
+        # Retrieve global task span from redis
+        payload = get_task_span(task.task_id)
+        if payload:
+            propagator = TraceContextTextMapPropagator()
+            parent_context = propagator.extract(payload)
+            token = context.attach(parent_context)
+        else:
+            token = None
+
         try:
-            # Use ThreadPoolExecutor to run seedgen for all models in parallel
-            with ThreadPoolExecutor(max_workers=len(gen_model_list)) as executor:
-                futures = []
-                for gen_model in gen_model_list:
-                    future = executor.submit(
-                        run_seedgen_for_task, task, database_url, storage_dir, gen_model)
-                    futures.append((future, gen_model))
-
-                # Wait for all futures to complete and handle any exceptions
-                errors = []
-                for future, gen_model in futures:
-                    try:
-                        future.result()
-                        print(
-                            f"[*] Seedgen workflow finished for task {task.task_id} with Generative Model {gen_model}")
-                    except Exception as e:
-                        print(
-                            f"[!] Error processing task {task.task_id} with model {gen_model}: {e}")
-                        errors.append((gen_model, e))
-
-                if errors:
-                    error_msg = "; ".join(
-                        [f"{model}: {err}" for model, err in errors])
-                    raise Exception(
-                        f"Seedgen failed for some models: {error_msg}")
-
-            print(
-                f"[*] Seedgen workflow finished for task {task.task_id} for all models")
-            cb = functools.partial(ack_nack_message, ch, method.delivery_tag)
-            connection.add_callback_threadsafe(cb)
-        except Exception as e:
-            print(f"[!] Error processing task {task.task_id}: {e}")
-            print(traceback.format_exc())
-
             # Retrieve the current retry count from message headers.
             retry_count = 0
             if properties.headers and "x-retry" in properties.headers:
                 retry_count = properties.headers["x-retry"]
+            with start_span_with_crs_inheritance(
+                f"attempt #{retry_count+1}",
+                attributes={
+                    "crs.action.category": "input_generation",
+                    "crs.action.name": "generate_fuzzing_seeds",
+                    "crs.action.target": task.project_name
+                }
+            ) as process_span:
+                # Save the current context to propagate to threads
+                parent_context = context.get_current()
+                try:
+                    # Use ThreadPoolExecutor to run seedgen for all models in parallel
+                    with ThreadPoolExecutor(max_workers=len(gen_model_list)) as executor:
+                        futures = []
+                        for gen_model in gen_model_list:
+                            future = executor.submit(
+                                run_seedgen_with_span, task, database_url, storage_dir, gen_model, parent_context)
+                            futures.append((future, gen_model))
 
-            if retry_count < 3:
-                new_retry = retry_count + 1
-                print(
-                    f"[!] Requeuing task {task.task_id}, attempt {new_retry}")
-                # Create updated headers with the new retry count.
-                new_headers = properties.headers.copy() if properties.headers else {}
-                new_headers["x-retry"] = new_retry
-                new_props = pika.BasicProperties(headers=new_headers)
-                # Republish to the same queue (using queue_name from the parent scope)
-                connection.add_callback_threadsafe(
-                    lambda: ch.basic_publish(
-                        exchange="",
-                        routing_key=queue_name,
-                        body=body,
-                        properties=new_props
+                        # Wait for all futures to complete and handle any exceptions
+                        errors = []
+                        for future, gen_model in futures:
+                            try:
+                                future.result()
+                                print(
+                                    f"[*] Seedgen workflow finished for task {task.task_id} with Generative Model {gen_model}")
+                            except Exception as e:
+                                print(
+                                    f"[!] Error processing task {task.task_id} with model {gen_model}: {e}")
+                                errors.append((gen_model, e))
+
+                        if errors:
+                            error_msg = "; ".join(
+                                [f"{model}: {err}" for model, err in errors])
+                            raise Exception(
+                                f"Seedgen failed for some models: {error_msg}")
+                    print(
+                        f"[*] Seedgen workflow finished for task {task.task_id} for all models")
+                    cb = functools.partial(
+                        ack_nack_message, ch, method.delivery_tag)
+                    connection.add_callback_threadsafe(cb)
+                except Exception as e:
+                    print(f"[!] Error processing task {task.task_id}: {e}")
+                    print(traceback.format_exc())
+
+                    # Retrieve the current retry count from message headers.
+                    retry_count = 0
+                    if properties.headers and "x-retry" in properties.headers:
+                        retry_count = properties.headers["x-retry"]
+
+                    if retry_count < 3:
+                        new_retry = retry_count + 1
+                        print(
+                            f"[!] Requeuing task {task.task_id}, attempt {new_retry}")
+                        # Create updated headers with the new retry count.
+                        new_headers = properties.headers.copy() if properties.headers else {}
+                        new_headers["x-retry"] = new_retry
+                        new_props = pika.BasicProperties(headers=new_headers)
+                        # Republish to the same queue (using queue_name from the parent scope)
+                        connection.add_callback_threadsafe(
+                            lambda: ch.basic_publish(
+                                exchange="",
+                                routing_key=queue_name,
+                                body=body,
+                                properties=new_props
+                            )
+                        )
+                    else:
+                        print(
+                            f"[!] Task {task.task_id} failed after {retry_count} attempts. Not requeuing.")
+
+                    # In any case, acknowledge the original message so it is removed from the queue.
+                    connection.add_callback_threadsafe(
+                        lambda: ack_nack_message(ch, method.delivery_tag)
                     )
-                )
-            else:
-                print(
-                    f"[!] Task {task.task_id} failed after {retry_count} attempts. Not requeuing.")
-
-            # In any case, acknowledge the original message so it is removed from the queue.
-            connection.add_callback_threadsafe(
-                lambda: ack_nack_message(ch, method.delivery_tag)
-            )
+        finally:
+            if token:
+                context.detach(token)
 
     def ack_nack_message(channel, delivery_tag, nack=False):
         if channel.is_open:
