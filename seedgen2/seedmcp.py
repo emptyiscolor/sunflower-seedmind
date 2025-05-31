@@ -44,6 +44,9 @@ class CodeAnalysisAgent:
                     "command": "python3",
                     "args": ["-m", "mcp_server_tree_sitter.server", "--config", "treesitter_config.yaml"],
                     "transport": "stdio",
+                    "env": {
+                        "MCP_TS_LOG_LEVEL": "WARNING",
+                    }
                 }
             }
         )
