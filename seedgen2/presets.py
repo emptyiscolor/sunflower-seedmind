@@ -8,6 +8,7 @@ from seedgen2.utils.singleton import singleton
 from pydantic import SecretStr
 from dotenv import load_dotenv
 import os
+import threading
 
 load_dotenv()
 
@@ -35,38 +36,38 @@ class SeedGen2KnowledgeableModel(BaseModel):
 
 
 class SeedGen2GenerativeModel(BaseModel):
-    _instance = None
-    _custom_model = None
+    _thread_local = threading.local()
 
     @classmethod
     def set_custom_model(cls, model_name):
-        cls._custom_model = model_name
-        cls._instance = None  # Reset instance to force recreation with new model
+        cls._thread_local.custom_model = model_name
+        cls._thread_local.instance = None  # Reset instance for this thread
 
     def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(SeedGen2GenerativeModel, cls).__new__(cls)
-            if cls._custom_model:
+        if not hasattr(cls._thread_local, 'instance') or cls._thread_local.instance is None:
+            cls._thread_local.instance = super(
+                SeedGen2GenerativeModel, cls).__new__(cls)
+            custom_model = getattr(cls._thread_local, 'custom_model', None)
+            if custom_model:
                 # Use custom model if set
-                model_name = cls._custom_model
-                cls._instance.model = ChatOpenAI(
+                model_name = custom_model
+                cls._thread_local.instance.model = ChatOpenAI(
                     model=model_name,
                     base_url=os.getenv("LITELLM_BASE_URL"),
                     api_key=SecretStr(os.getenv("LITELLM_KEY")),
                     include_response_headers=True
                 )
                 # Initialize json_model based on model capabilities
-                cls._instance.json_model = (
-                    cls._instance.model.bind(
+                cls._thread_local.instance.json_model = (
+                    cls._thread_local.instance.model.bind(
                         response_format={"type": "json_object"})
                     if model_name != "qwen"
                     else None
                 )
-                # Skip the __init__ method since we've already initialized
-                cls._instance._initialized = True
+                cls._thread_local.instance._initialized = True
             else:
-                cls._instance._initialized = False
-        return cls._instance
+                cls._thread_local.instance._initialized = False
+        return cls._thread_local.instance
 
     def __init__(self):
         if not hasattr(self, '_initialized') or not self._initialized:
@@ -81,8 +82,3 @@ class SeedGen2RefinerModel(BaseModel):
 class SeedGen2InferModel(BaseModel):
     def __init__(self):
         super().__init__("SEEDGEN_INFER_MODEL", "o3-mini")
-
-class SeedGen2ContextModel(BaseModel):
-    # use models that support large context later
-    def __init__(self):
-        super().__init__("SEEDGEN_CONTEXT_ANALYSIS_MODEL", "gpt-4o")
