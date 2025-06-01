@@ -681,6 +681,10 @@ def run_full_mode(
                         )
                         print(
                             f"[*] Seedgen: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
+                        redis_client = get_redis_client()
+                        if redis_client:
+                            redis_client.set(
+                                f"seedgen:{task.task_id}:{gen_model}:{harness_binary}", "done")
         finally:
             context.detach(token)
 
