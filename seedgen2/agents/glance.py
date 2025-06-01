@@ -28,6 +28,11 @@ CONTEXT_CODEBASE_ANALYSIS = """
 The source code of target project is under the directory: {src_path}.
 """
 
+CONTEXT_DIFF_ANALYSIS = """
+The diff file is located at: {diff_path} . (default file name is ref.diff )
+This diff file contains the changes made to the source code, which may introduce new bugs. Analyze the diff to understand how to prepare seeds that can trigger more bugs.
+"""
+
 
 def generate_first_script(
         seedd: SeedD,
@@ -59,7 +64,8 @@ def initial_code_analysis(
         mcpagent: object,
         harness_source_code: str,
         harness_binary: str,
-        src_path: str
+        src_path: str,
+        diff_path: str = None
 ):
     model = SeedGen2ContextModel().model
     result = {}
@@ -71,6 +77,9 @@ def initial_code_analysis(
     ) + CONTEXT_CODEBASE_ANALYSIS.format(
         src_path=src_path
     )
+    context = context + CONTEXT_DIFF_ANALYSIS.format(
+        diff_path=diff_path
+    ) if diff_path else context
     final_prompt = McpPrompts.get_pre_analysis_prompt(
         prompt=PROMPT_MCP_INITIAL_CODE_ANALYSIS, context=context)
     if hasattr(mcpagent, "run_analysis"):

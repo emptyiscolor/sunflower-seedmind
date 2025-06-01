@@ -24,15 +24,17 @@ logging.basicConfig(level=logging.INFO,
 
 
 class MCPAnalysisResponse(BaseModel):
-    data_format_doc: str = Field(description="docs on how to compose the data structure, like expected input format")
+    data_format_doc: str = Field(
+        description="docs on how to compose the data structure, like expected input format")
     plan: str = Field(description="Code plan from the analysis")
+
 
 class CodeAnalysisAgent:
     """Agent responsible for code analysis and planner.
     Note: Use a separate agent for code analysis as the code base consumes too many tokens.
     """
 
-    def __init__(self, harness_source: str, project_path: str):
+    def __init__(self, harness_source: str, project_path: str, diff_dir: Optional[str] = None):
         self.client = MultiServerMCPClient(
             {
                 "filesystem": {
@@ -54,8 +56,9 @@ class CodeAnalysisAgent:
         # NOTE: update to List if we need to perform parallel analysis on multiple harnesses sources.
         self.harness_source = harness_source
         self.project_path = project_path
+        self.diff_dir = diff_dir if diff_dir else None
         self.analysis_result = {}
-    
+
     def extract_json_result(self, resp_text: str) -> dict:
         """Extract JSON result between ```json and ``` from the raw text with regex."""
         try:
@@ -75,7 +78,8 @@ class CodeAnalysisAgent:
         """Set up the react agent."""
         tools = await self.client.get_tools()
         # logging.debug(f"MCP Tools: {tools}")
-        self.agent = create_react_agent(model_name, tools, response_format=MCPAnalysisResponse)
+        self.agent = create_react_agent(
+            model_name, tools, response_format=MCPAnalysisResponse)
 
     async def setup_analysis_agent_stateful(self, model_name: str = "gpt-4o") -> Any:
         """Set up LangGraph StateGraph."""
@@ -108,7 +112,8 @@ class CodeAnalysisAgent:
             if mcp_response:
                 structured_response = mcp_response["structured_response"]
                 logging.debug(f"Analysis response: {structured_response}")
-                result = {"structure": structured_response.data_format_doc, "plan": structured_response.plan}
+                result = {"structure": structured_response.data_format_doc,
+                          "plan": structured_response.plan}
             else:
                 logging.error("No response from MCP agent.")
 
@@ -143,7 +148,7 @@ class CodeAnalysisAgent:
 class SeedMcpAgent:
     """Agent responsible for generating seeds based on various strategies."""
 
-    def __init__(self, result_dir: str, src_dir: str, project_name: str, harness_binary: str, harness_source: str, gen_model: str):
+    def __init__(self, result_dir: str, src_dir: str, project_name: str, harness_binary: str, harness_source: str, gen_model: str, diff_dir: Optional[str] = None):
         """Initialize the SeedGenAgent.
 
         Args:
@@ -155,6 +160,7 @@ class SeedMcpAgent:
         self.shared_dir = Path(f"{result_dir}/../shared")
         self.result_dir = Path(result_dir)
         self.src_dir = Path(src_dir)
+        self.diff_dir = Path(diff_dir) if diff_dir else None
         self.project_name = project_name
         self.harness_binary = harness_binary
         self.harness_source = harness_source
@@ -176,7 +182,8 @@ class SeedMcpAgent:
                               str(self.src_dir.absolute())),
             self.harness_source,
             self.harness_binary,
-            str(self.src_dir.absolute())
+            str(self.src_dir.absolute()),
+            str(self.diff_dir.absolute()) if self.diff_dir else None,
         )
 
         # 2. Generate 3 ingredients: initial generator script, structure documentation, and target filetype
