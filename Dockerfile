@@ -119,5 +119,6 @@ RUN npm install -g tree-sitter-cli
 ENV PYTHONUNBUFFERED=1
 
 COPY ./entrypoint.sh ./entrypoint.sh
+COPY ./treesitter_config.yaml ./treesitter_config.yaml
 
 ENTRYPOINT ["./entrypoint.sh"]

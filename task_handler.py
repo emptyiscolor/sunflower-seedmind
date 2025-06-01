@@ -22,6 +22,7 @@ from infra.aixcc import (
     print_project_info,
     run_mini_mode,
     run_full_mode,
+    run_mcp_mode,
     run_codex_mode
 )
 from utils.task import TaskData
@@ -167,8 +168,25 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
             storage_dir,
             parent_context=context.get_current()
         )
+        # enable MCP + react agent, conflict with codex
+        enable_mcp = os.getenv("ENABLE_MCP", False)
         enable_codex = os.getenv("ENABLE_CODEX", False)
-        if enable_codex:
+        if enable_mcp:
+            future_mcp = executor.submit(
+                run_mode_with_span, run_mcp_mode, "mcp",
+                task.project_name,
+                project_config,
+                os.path.join(task_dir, task.focus),
+                os.path.join(task_dir, fuzz_tooling_dir),
+                gen_model,
+                save_result_to_db,
+                task,
+                database_url,
+                storage_dir,
+                parent_context=context.get_current()
+            )
+            future_list = [future_full, future_mini, future_mcp]
+        elif enable_codex:
             future_codex = executor.submit(
                 run_mode_with_span, run_codex_mode, "codex",
                 task.project_name,
@@ -261,7 +279,6 @@ def save_result_to_db(
             )
             send_to_cmin_queue(
                 connection, task, harness_binary, seed_tar_gz_path)
-
     except Exception as e:
         db_session.rollback()
         print("Error occurred:", e)
@@ -414,7 +431,6 @@ def listen_for_tasks(
                                 [f"{model}: {err}" for model, err in errors])
                             raise Exception(
                                 f"Seedgen failed for some models: {error_msg}")
-
                     print(
                         f"[*] Seedgen workflow finished for task {task.task_id} for all models")
                     cb = functools.partial(

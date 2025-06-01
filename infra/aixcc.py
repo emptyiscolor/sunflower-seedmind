@@ -11,6 +11,7 @@ from opentelemetry import trace, context
 from seedgen2.seedgen import SeedGenAgent
 from seedgen2.seedmini import SeedMiniAgent
 from seedgen2.seedcodex import SeedCodexAgent
+from seedgen2.seedmcp import SeedMcpAgent
 
 from utils.redis import get_redis_client
 from utils.telemetry import start_span_with_crs_inheritance
@@ -445,7 +446,111 @@ def run_mini_mode(
 
                 print(
                     f"[!] Harness '{harness_name}' failed with exception: {exc}")
+
                 errors[harness_name] = exc
+
+        if errors:
+            error_details = "\n".join(
+                [f"- {harness}: {error}" for harness, error in errors.items()])
+            raise Exception(
+                f"SeedMini failed for {len(errors)} harness(es):\n{error_details}")
+        print(
+            f"[*] SeedMini successfully executed on all harnesses with Generative Model {gen_model}")
+
+
+def run_mcp_mode(
+    project_name,
+    project_config,
+    src_path,
+    fuzz_tooling,
+    gen_model="gpt-4o",
+    save_result_func=None,
+    task=None,
+    database_url="",
+    storage_dir=""
+):
+    project_dir = os.path.abspath(os.path.join(
+        ".tmp", "tasks", task.task_id, gen_model, "seedmcp", project_name))
+    os.makedirs(project_dir, exist_ok=True)
+
+    oss_fuzz_project_dir = os.path.join(fuzz_tooling, "projects", project_name)
+    is_java = project_config["language"] in ["jvm", "java"]
+
+    fuzzers = find_files_with_fuzzer_function(
+        src_path, oss_fuzz_project_dir, is_java)
+
+    harness_binaries = list(fuzzers.keys())
+    print(
+        f"[*] Running SeedMCP on all fuzzers: {harness_binaries} with Generative Model {gen_model}")
+
+    def process_harness(harness_binary):
+        if harness_binary not in fuzzers:
+            return
+        print(
+            f"[*] Running SeedMCP for harness {harness_binary} with Generative Model {gen_model}")
+
+        redis_client = get_redis_client()
+        fuzzer_dir = os.path.join(project_dir, harness_binary)
+        if os.path.exists(fuzzer_dir):
+            if redis_client:
+                is_done = redis_client.get(
+                    f"seedmcp:{task.task_id}:{gen_model}:{harness_binary}")
+                if is_done == b"done":
+                    print(
+                        f"[*] Harness {harness_binary} already processed. Skipping.")
+                    return
+                else:
+                    print(
+                        f"[*] Incomplete fuzzer directory found for harness {harness_binary}, removing it.")
+                    shutil.rmtree(fuzzer_dir)
+            else:
+                shutil.rmtree(fuzzer_dir)
+        os.makedirs(fuzzer_dir, exist_ok=True)
+
+        agent = SeedMcpAgent(fuzzer_dir, src_path, project_name, harness_binary,
+                             fuzzers[harness_binary], gen_model)
+        agent.run()
+
+        if save_result_func:
+            save_result_func(
+                database_url,
+                storage_dir,
+                task,
+                harness_binary,
+                os.path.join(fuzzer_dir, "seeds"),
+                "seedmcp",
+                gen_model
+            )
+            print(
+                f"[*] SeedMCP: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
+
+            redis_client = get_redis_client()
+            if redis_client:
+                redis_client.set(
+                    f"seedmcp:{task.task_id}:{gen_model}:{harness_binary}", "done")
+
+    # Create a thread pool to parallelize the SeedMini execution per harness
+    with ThreadPoolExecutor(max_workers=len(harness_binaries) or None) as executor:
+        futures = [executor.submit(process_harness, hb)
+                   for hb in harness_binaries]
+
+        # Wait for all tasks to complete and handle any exceptions
+        errors = {}
+        for i, future in enumerate(as_completed(futures)):
+            try:
+                future.result()
+            except Exception as exc:
+                # Find which harness this future was processing
+                for j, f in enumerate(futures):
+                    if f == future:
+                        harness_name = harness_binaries[j]
+                        break
+                else:
+                    harness_name = f"unknown_harness_{i}"
+
+                print(
+                    f"[!] Harness '{harness_name}' failed with exception: {exc}")
+                errors[harness_name] = exc.with_traceback()
 
         if errors:
             error_details = "\n".join(
@@ -473,7 +578,6 @@ def run_full_mode(
         # Don't run full seedgen on Java projects
         return
 
-    # Compile the project
     with start_span_with_crs_inheritance(
         f"build project"
     ):
@@ -507,7 +611,6 @@ def run_full_mode(
     def process_harness(harness_binary, parent_context):
         if harness_binary not in fuzzers:
             return
-
         token = context.attach(parent_context)
         try:
             with start_span_with_crs_inheritance(
@@ -578,12 +681,6 @@ def run_full_mode(
                         )
                         print(
                             f"[*] Seedgen: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
-                        # log_seedgen(task.task_id, "generated_seeds_full",
-                        #             target=task.project_name, harness_name=harness_binary, gen_model=gen_model)
-                        redis_client = get_redis_client()
-                        if redis_client:
-                            redis_client.set(
-                                f"seedgen:{task.task_id}:{gen_model}:{harness_binary}", "done")
         finally:
             context.detach(token)
 
