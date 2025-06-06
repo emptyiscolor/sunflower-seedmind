@@ -3,7 +3,7 @@
 # 1. Generating the first round of a seed generation script, based purely on the source code of a fuzzing harness
 # 2. Generating the subsequent rounds of the script, based on previous scripts and seed format documentation
 
-
+import os
 from seedgen2.presets import SeedGen2InferModel, SeedGen2ContextModel
 from seedgen2.graphs.sowbot import Sowbot
 from seedgen2.graphs.mcpbot import McpPrompts
@@ -30,6 +30,8 @@ The source code of target project is under the directory: {src_path}.
 
 CONTEXT_DIFF_ANALYSIS = """
 The diff file is located at: {diff_path} . (default file name is ref.diff )
+the content of the diff file is as follows:
+{diff_file_content}
 This diff file contains the changes made to the source code, which may introduce new bugs. Analyze the diff to understand how to prepare seeds that can trigger more bugs.
 """
 
@@ -77,9 +79,20 @@ def initial_code_analysis(
     ) + CONTEXT_CODEBASE_ANALYSIS.format(
         src_path=src_path
     )
-    context = context + CONTEXT_DIFF_ANALYSIS.format(
-        diff_path=diff_path
-    ) if diff_path else context
+    if diff_path:
+        print("[DEBUG] Using diff path for analysis:", diff_path)
+        try:
+            with open(os.path.join(diff_path, "ref.diff"), 'r') as diff_file:
+                diff_content = diff_file.read()
+        except FileNotFoundError:
+            print(
+                "[DEBUG] diff file not found, AI will find at its own discretion", diff_path)
+            diff_content = ""
+
+        context = context + CONTEXT_DIFF_ANALYSIS.format(
+            diff_path=diff_path,
+            diff_file_content=diff_content,
+        )
     final_prompt = McpPrompts.get_pre_analysis_prompt(
         prompt=PROMPT_MCP_INITIAL_CODE_ANALYSIS, context=context)
     if hasattr(mcpagent, "run_analysis"):
