@@ -280,6 +280,7 @@ def save_result_to_db(
             )
             send_to_cmin_queue(
                 connection, task, harness_binary, seed_tar_gz_path)
+            connection.close()
     except Exception as e:
         db_session.rollback()
         print("Error occurred:", e)
@@ -386,7 +387,7 @@ def listen_for_tasks(
         payload = get_task_span(task.task_id)
         if payload:
             propagator = TraceContextTextMapPropagator()
-            parent_context = propagator.extract(payload)
+            parent_context = propagator.extract(json.loads(payload))
             token = context.attach(parent_context)
         else:
             token = None
