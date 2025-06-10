@@ -279,6 +279,7 @@ def save_result_to_db(
             )
             send_to_cmin_queue(
                 connection, task, harness_binary, seed_tar_gz_path)
+            connection.close()
     except Exception as e:
         db_session.rollback()
         print("Error occurred:", e)
