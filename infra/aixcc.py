@@ -467,7 +467,8 @@ def run_mcp_mode(
     save_result_func=None,
     task=None,
     database_url="",
-    storage_dir=""
+    storage_dir="",
+    diff_dir=""
 ):
     project_dir = os.path.abspath(os.path.join(
         ".tmp", "tasks", task.task_id, gen_model, "seedmcp", project_name))
@@ -517,7 +518,7 @@ def run_mcp_mode(
                     f"run seedmcp agent"
                 ):
                     agent = SeedMcpAgent(fuzzer_dir, src_path, project_name, harness_binary,
-                                         fuzzers[harness_binary], gen_model)
+                                         fuzzers[harness_binary], gen_model, diff_dir)
                     agent.run()
 
                 if save_result_func:
