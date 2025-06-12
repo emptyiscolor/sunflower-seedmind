@@ -39,7 +39,7 @@ class CodeAnalysisAgent:
             {
                 "filesystem": {
                     "command": "npx",
-                    "args": ["-y", "@modelcontextprotocol/server-filesystem", project_path],
+                    "args": ["-y", "@modelcontextprotocol/server-filesystem", str(Path(project_path).parent)],
                     "transport": "stdio",
                 },
                 "treesitter": {

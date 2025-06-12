@@ -183,7 +183,7 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
                 task,
                 database_url,
                 storage_dir,
-                diff_dir,
+                os.path.join(task_dir, diff_dir),
                 parent_context=context.get_current()
             )
             future_list = [future_full, future_mini, future_mcp]
