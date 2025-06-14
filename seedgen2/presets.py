@@ -86,4 +86,4 @@ class SeedGen2InferModel(BaseModel):
 class SeedGen2ContextModel(BaseModel):
     # use models that support large context later
     def __init__(self):
-        super().__init__("SEEDGEN_CONTEXT_ANALYSIS_MODEL", "gpt-4o")
+        super().__init__("SEEDGEN_CONTEXT_ANALYSIS_MODEL", "gpt-4.1")
