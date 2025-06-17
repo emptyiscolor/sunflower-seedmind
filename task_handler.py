@@ -276,12 +276,12 @@ def save_result_to_db(
 
         # Also send seeds to cmin_queue if the project is not java
         if send_to_cmin:
-            connection = pika.BlockingConnection(
+            cmin_connection = pika.BlockingConnection(
                 pika.URLParameters(rabbitmq_host)
             )
             send_to_cmin_queue(
-                connection, task, harness_binary, seed_tar_gz_path)
-            connection.close()
+                cmin_connection, task, harness_binary, seed_tar_gz_path)
+            cmin_connection.close()
     except Exception as e:
         db_session.rollback()
         print("Error occurred:", e)
