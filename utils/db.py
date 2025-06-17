@@ -20,25 +20,32 @@ Base = declarative_base()
 
 # Define PostgreSQL ENUM types
 TaskTypeEnum = ENUM('full', 'delta', name='tasktypeenum')
-TaskStatusEnum = ENUM('canceled', 'errored', 'pending', 'processing', 'succeeded', 'failed', 'waiting', name='taskstatusenum')
+TaskStatusEnum = ENUM('canceled', 'errored', 'pending', 'processing',
+                      'succeeded', 'failed', 'waiting', name='taskstatusenum')
 SourceTypeEnum = ENUM('repo', 'fuzz_tooling', 'diff', name='sourcetypeenum')
-FuzzerTypeEnum = ENUM('seedgen', 'prime', 'general', 'directed', 'corpus', name='fuzzertypeenum')
-SanitizerEnum = ENUM('ASAN', 'UBSAN', 'MSAN', 'JAZZER', 'UNKNOWN', name='sanitizerenum')
+FuzzerTypeEnum = ENUM('seedgen', 'prime', 'general',
+                      'directed', 'corpus', name='fuzzertypeenum')
+SanitizerEnum = ENUM('ASAN', 'UBSAN', 'MSAN', 'JAZZER',
+                     'UNKNOWN', name='sanitizerenum')
 
 # CRS basic tables
 
+
 class User(Base):
     __tablename__ = 'users'
-    id = Column(Integer, primary_key=True)  # serial maps to auto-incrementing Integer
+    # serial maps to auto-incrementing Integer
+    id = Column(Integer, primary_key=True)
     username = Column(String, nullable=False, unique=True)
     password = Column(String, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
 
 class Message(Base):
     __tablename__ = 'messages'
     id = Column(String, primary_key=True)
     message_time = Column(BigInteger, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
 
 class Task(Base):
     __tablename__ = 'tasks'
@@ -57,6 +64,7 @@ class Task(Base):
     user = relationship('User')
     message = relationship('Message')
 
+
 class Source(Base):
     __tablename__ = 'sources'
     id = Column(Integer, primary_key=True)
@@ -71,6 +79,7 @@ class Source(Base):
 
 # Component specific tables
 
+
 class Seed(Base):
     __tablename__ = 'seeds'
     id = Column(Integer, primary_key=True)
@@ -81,6 +90,21 @@ class Seed(Base):
     fuzzer = Column(FuzzerTypeEnum)
     coverage = Column(Float)  # double precision maps to Float
     metric = Column(JSONB)
+
+    # Relationship
+    task = relationship('Task')
+
+
+class Bug(Base):
+    __tablename__ = 'bugs'
+    id = Column(Integer, primary_key=True)
+    task_id = Column(String, ForeignKey('tasks.id'), nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    architecture = Column(String, nullable=False)
+    poc = Column(String, nullable=False)  # text maps to String
+    harness_name = Column(String, nullable=False)  # text maps to String
+    sanitizer = Column(String, nullable=False)
+    sarif_report = Column(JSONB)
 
     # Relationship
     task = relationship('Task')
