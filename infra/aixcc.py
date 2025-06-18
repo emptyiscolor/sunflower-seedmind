@@ -465,6 +465,7 @@ def run_mcp_mode(
     fuzz_tooling,
     gen_model="gpt-4.1",
     save_result_func=None,
+    save_to_triage_func=None,
     task=None,
     database_url="",
     storage_dir="",
@@ -536,6 +537,21 @@ def run_mcp_mode(
                         )
                         print(
                             f"[*] SeedMCP: Seeds stored in DB for task {task.task_id} for harness {harness_binary} with Generative Model {gen_model}")
+
+                        if save_to_triage_func:
+                            sanitizers = []
+                            if "sanitizers" in project_config:
+                                for sanitizer in project_config["sanitizers"]:
+                                    sanitizers.append(sanitizer)
+
+                            save_to_triage_func(
+                                task,
+                                os.path.join(fuzzer_dir, "seeds"),
+                                sanitizers,
+                                [harness_binary],
+                                storage_dir,
+                                database_url
+                            )
 
                         redis_client = get_redis_client()
                         if redis_client:

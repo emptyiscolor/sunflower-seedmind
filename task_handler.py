@@ -180,6 +180,7 @@ def run_seedgen_for_task(task: TaskData, database_url: str, storage_dir: str, ge
                 os.path.join(task_dir, fuzz_tooling_dir),
                 gen_model,
                 save_result_to_db,
+                save_mcp_seeds_as_bugs,
                 task,
                 database_url,
                 storage_dir,
@@ -275,15 +276,67 @@ def save_result_to_db(
 
         # Also send seeds to cmin_queue if the project is not java
         if send_to_cmin:
-            connection = pika.BlockingConnection(
+            cmin_connection = pika.BlockingConnection(
                 pika.URLParameters(rabbitmq_host)
             )
             send_to_cmin_queue(
-                connection, task, harness_binary, seed_tar_gz_path)
-            connection.close()
+                cmin_connection, task, harness_binary, seed_tar_gz_path)
+            cmin_connection.close()
     except Exception as e:
         db_session.rollback()
         print("Error occurred:", e)
+        raise
+    finally:
+        db_session.close()
+
+
+def save_mcp_seeds_as_bugs(task, seed_dir, sanitizers, harnesses, storage_dir, database_url):
+    db_session = db.connect_database(database_url)
+
+    try:
+        seed_storage_dir = os.path.join(
+            storage_dir, "seedmcp", str(task.task_id), "seedmcp_to_triage")
+        os.makedirs(seed_storage_dir, exist_ok=True)
+
+        # Get all files in the corpus directory
+        seed_files = []
+        for root, _, files in os.walk(seed_dir):
+            for file in files:
+                seed_files.append(os.path.join(root, file))
+
+        # Copy each file to the storage directory and create bug records
+        for file_path in seed_files:
+            # Get relative path from task_corpus_dir
+            rel_path = os.path.relpath(file_path, seed_dir)
+            # Create destination path
+            dest_path = os.path.join(seed_storage_dir, rel_path)
+            # Ensure destination directory exists
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            # Copy the file
+            shutil.copy2(file_path, dest_path)
+
+            # Create a bug record for each sanitizer and harness combination
+            for sanitizer in sanitizers:
+                for harness in harnesses:
+                    new_bug = db.Bug(
+                        task_id=str(task.task_id),
+                        architecture="x86_64",  # Default architecture
+                        poc=dest_path,
+                        harness_name=harness,
+                        sanitizer=sanitizer,
+                        sarif_report=None  # No SARIF report for now
+                    )
+                    db_session.add(new_bug)
+
+        # Commit all the bug records
+        db_session.commit()
+        print(
+            f"[+] Saved {len(seed_files) * len(sanitizers) * len(harnesses)} seeds from MCP as bug records for task {task.task_id}")
+
+    except Exception as e:
+        db_session.rollback()
+        print(f"[!] Error saving bugs to DB: {e}")
+        print(traceback.format_exc())
         raise
     finally:
         db_session.close()

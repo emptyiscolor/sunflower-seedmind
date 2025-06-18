@@ -101,7 +101,7 @@ create table if not exists bugs
     architecture varchar       not null,
     poc          text          not null,
     harness_name text          not null,
-    sanitizer    sanitizerenum not null,
+    sanitizer    varchar       not null,
     sarif_report jsonb
 );
 
