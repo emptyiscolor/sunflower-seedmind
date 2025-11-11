@@ -81,7 +81,8 @@ class SeedGen2RefinerModel(BaseModel):
 
 class SeedGen2InferModel(BaseModel):
     def __init__(self):
-        super().__init__("SEEDGEN_INFER_MODEL", "o3-mini")
+        super().__init__("SEEDGEN_INFER_MODEL", "o4-mini")
+
 
 class SeedGen2ContextModel(BaseModel):
     # use models that support large context later

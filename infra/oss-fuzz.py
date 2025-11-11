@@ -39,6 +39,12 @@ def parse_args():
         help="Path to a local source directory",
     )
     parser.add_argument(
+        "--model",
+        type=str,
+        default="gpt-4.1",
+        help="model name",
+    )
+    parser.add_argument(
         "--rebuild",
         action="store_true",
         help="Rebuild fuzzers",
@@ -132,8 +138,9 @@ def find_fuzzers(project_out_dir):
                 fuzzers.append(filename)
 
     if not fuzzers:
-        raise FileNotFoundError("No executables found with the function 'LLVMFuzzerTestOneInput'")
-    
+        raise FileNotFoundError(
+            "No executables found with the function 'LLVMFuzzerTestOneInput'")
+
     return fuzzers
 
 
@@ -153,7 +160,7 @@ def workdir_from_dockerfile(fuzz_tooling, project_name):
                 workdir = os.path.join('/src', workdir)
 
             return os.path.normpath(workdir)
-    
+
     return os.path.join('/src', project_name)
 
 
@@ -201,7 +208,8 @@ def compile_project(root, project_name, project_config, src_path, rebuild):
 
     # Delete the src cache volume ({project_name}_src_cache)
     # the volume may not exist, so we don't check the return code
-    subprocess.run(["docker", "volume", "rm", f"{project_name}_src_cache"], check=False)
+    subprocess.run(["docker", "volume", "rm",
+                   f"{project_name}_src_cache"], check=False)
 
     # Run the Docker container with the project image
     # Mount the `out` and `work` directories to the temporary directory
@@ -216,7 +224,8 @@ def compile_project(root, project_name, project_config, src_path, rebuild):
     }
     if src_path:
         if not os.path.exists(os.path.abspath(src_path)):
-            raise FileNotFoundError(f"Local source path {os.path.abspath(src_path)} doesn't exist")
+            raise FileNotFoundError(
+                f"Local source path {os.path.abspath(src_path)} doesn't exist")
         workdir = workdir_from_dockerfile(root, project_name)
         mount_configs[f"{workdir}"] = os.path.abspath(src_path)
     mount_commands = list(
@@ -254,15 +263,16 @@ def compile_project(root, project_name, project_config, src_path, rebuild):
     )
 
     docker_command = [
-            "docker",
-            "run",
-            "--privileged",
-            "--shm-size=2g",
-            "--entrypoint=compile",
-        ]
+        "docker",
+        "run",
+        "--privileged",
+        "--shm-size=2g",
+        "--entrypoint=compile",
+    ]
     # only use src_cache if local src path is not being used
     if not src_path:
-        docker_command += ["--mount", f"type=volume,source={project_name}_src_cache,target=/src"]
+        docker_command += ["--mount",
+                           f"type=volume,source={project_name}_src_cache,target=/src"]
 
     run_command = (
         docker_command
@@ -281,7 +291,7 @@ def compile_project(root, project_name, project_config, src_path, rebuild):
     process.wait()
     if process.returncode != 0:
         raise subprocess.CalledProcessError(process.returncode, run_command)
-    
+
     return find_fuzzers(os.path.join(cache_dir, "out"))
 
 
@@ -316,7 +326,8 @@ def run_project(root, project_name, project_config, src_path) -> tuple[str, str]
     }
     if src_path:
         if not os.path.exists(os.path.abspath(src_path)):
-            raise FileNotFoundError(f"Local source path {os.path.abspath(src_path)} doesn't exist")
+            raise FileNotFoundError(
+                f"Local source path {os.path.abspath(src_path)} doesn't exist")
         workdir = workdir_from_dockerfile(root, project_name)
         mount_configs[f"{workdir}"] = os.path.abspath(src_path)
     mount_commands = list(
@@ -335,16 +346,17 @@ def run_project(root, project_name, project_config, src_path) -> tuple[str, str]
     )
 
     docker_command = [
-            "docker",
-            "run",
-            "-d",
-            "--privileged",
-            "--shm-size=2g",
-            "--entrypoint=/seedd",
-        ]
+        "docker",
+        "run",
+        "-d",
+        "--privileged",
+        "--shm-size=2g",
+        "--entrypoint=/seedd",
+    ]
     # only use src_cache if local src path is not being used
     if not src_path:
-        docker_command += ["--mount", f"type=volume,source={project_name}_src_cache,target=/src"]
+        docker_command += ["--mount",
+                           f"type=volume,source={project_name}_src_cache,target=/src"]
 
     run_command = (
         docker_command
@@ -372,7 +384,7 @@ def find_files_with_fuzzer_function(src_path, oss_fuzz_project_dir, is_java):
     Iterates over all files under src_path and oss_fuzz_project_dir.
     For non-Java projects, it looks for the string "LLVMFuzzerTestOneInput".
     For Java projects, it looks for the string "fuzzerTestOneInput".
-    
+
     Returns:
         dict: A dictionary where each key is a filename (without its extension) and
               the corresponding value is the file's content.
@@ -409,7 +421,7 @@ def find_files_with_fuzzer_function(src_path, oss_fuzz_project_dir, is_java):
     return result
 
 
-def build_and_run_targets(project_name, harness_binaries, src_path, root, rebuild=False, all=False, mini=False):
+def build_and_run_targets(project_name, harness_binaries, src_path, root, rebuild=False, all=False, mini=False, model_name="gpt-4.1"):
     os.makedirs(".tmp", exist_ok=True)
 
     project_yaml_path = validate_environment(root, project_name)
@@ -419,49 +431,56 @@ def build_and_run_targets(project_name, harness_binaries, src_path, root, rebuil
     is_java = project_config["language"] in ["jvm", "java"]
 
     if is_java or mini:
-        run_mini_mode(project_name, project_config, harness_binaries, src_path, root, all)
+        run_mini_mode(project_name, project_config,
+                      harness_binaries, src_path, root, all, model_name=model_name)
     else:
-        run_full_mode(project_name, project_config, harness_binaries, src_path, root, rebuild, all)
+        run_full_mode(project_name, project_config,
+                      harness_binaries, src_path, root, rebuild, all, model_name=model_name)
 
 
-def run_mini_mode(project_name, project_config, harness_binaries, src_path, root, all=False):
+def run_mini_mode(project_name, project_config, harness_binaries, src_path, root, all=False, model_name="gpt-4.1"):
     try:
         artifacts_dir = os.path.abspath(os.path.join(".tmp", project_name))
         os.makedirs(artifacts_dir, exist_ok=True)
 
         # determine the runtime id. We get the largest number and plus one
-        runtime_ids = [int(d) for d in os.listdir(artifacts_dir) if d.isdigit()]
+        runtime_ids = [int(d)
+                       for d in os.listdir(artifacts_dir) if d.isdigit()]
         runtime_id = max(runtime_ids) + 1 if runtime_ids else 0
 
         project_dir = os.path.join(artifacts_dir, str(runtime_id))
         oss_fuzz_project_dir = os.path.join(root, "projects", project_name)
         is_java = project_config["language"] in ["jvm", "java"]
 
-        fuzzers = find_files_with_fuzzer_function(src_path, oss_fuzz_project_dir, is_java)
+        fuzzers = find_files_with_fuzzer_function(
+            src_path, oss_fuzz_project_dir, is_java)
 
         if all:
-            print(f"[*] The flag --all is enabled, running seedgen on all fuzzers: {list(fuzzers.keys())}")
+            print(
+                f"[*] The flag --all is enabled, running seedgen on all fuzzers: {list(fuzzers.keys())}")
             harness_binaries = list(fuzzers.keys())
 
         for harness_binary in harness_binaries:
             if harness_binary not in fuzzers:
                 continue
             fuzzer_dir = os.path.join(project_dir, harness_binary)
-            agent = SeedMiniAgent(fuzzer_dir, project_name, harness_binary, fuzzers[harness_binary])
+            agent = SeedMiniAgent(fuzzer_dir, project_name,
+                                  harness_binary, fuzzers[harness_binary], model_name)
             agent.run()
-
 
     except (FileNotFoundError, ValueError) as e:
         print(f"[-] Error: {e}", file=sys.stderr)
         sys.exit(1)
 
 
-def run_full_mode(project_name, project_config, harness_binaries, src_path, root, rebuild=False, all=False):
+def run_full_mode(project_name, project_config, harness_binaries, src_path, root, rebuild=False, all=False, model_name="gpt-4.1"):
     try:
         # Compile the project
-        fuzzers = compile_project(root, project_name, project_config, src_path, rebuild)
+        fuzzers = compile_project(
+            root, project_name, project_config, src_path, rebuild)
         if all:
-            print(f"[*] The flag --all is enabled, running seedgen on all fuzzers: {fuzzers}")
+            print(
+                f"[*] The flag --all is enabled, running seedgen on all fuzzers: {fuzzers}")
             harness_binaries = fuzzers
 
         # Start the daemon
@@ -473,13 +492,15 @@ def run_full_mode(project_name, project_config, harness_binaries, src_path, root
             # make a separate dir for each fuzz binary target
             fuzzer_dir = os.path.join(project_dir, harness_binary)
             os.makedirs(fuzzer_dir, exist_ok=True)
-            shutil.copytree(os.path.join(project_dir, "out"), os.path.join(fuzzer_dir, "out"))
-            shutil.copytree(os.path.join(project_dir, "work"), os.path.join(fuzzer_dir, "work"))
+            shutil.copytree(os.path.join(project_dir, "out"),
+                            os.path.join(fuzzer_dir, "out"))
+            shutil.copytree(os.path.join(project_dir, "work"),
+                            os.path.join(fuzzer_dir, "work"))
             # get ip address of the seedd container, the container id is container_id
             ip_addr = subprocess.check_output(
                 ["docker", "inspect", "-f", "{{.NetworkSettings.IPAddress}}", container_id]).decode().strip()
             agent = SeedGenAgent(fuzzer_dir, ip_addr,
-                                 project_name, harness_binary)
+                                 project_name, harness_binary, model_name)
             agent.run()
     except (FileNotFoundError, ValueError) as e:
         print(f"[-] Error: {e}", file=sys.stderr)
@@ -488,7 +509,7 @@ def run_full_mode(project_name, project_config, harness_binaries, src_path, root
         if "container_id" in locals():
             print(f"[-] Stopping container {container_id}")
             subprocess.run(["docker", "stop", container_id], check=True)
-            
+
 
 def main():
     args = parse_args()
@@ -499,8 +520,10 @@ def main():
     rebuild = args.rebuild
     all = args.all
     mini = args.mini
+    model_name = args.model
 
-    build_and_run_targets(project_name, harness_binaries, src_path, root, rebuild, all, mini)
+    build_and_run_targets(project_name, harness_binaries,
+                          src_path, root, rebuild, all, mini, model_name)
 
 
 if __name__ == "__main__":

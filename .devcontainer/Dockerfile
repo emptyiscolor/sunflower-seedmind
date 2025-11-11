@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/python:3.12
+FROM mcr.microsoft.com/devcontainers/python:3.12-bookworm
 
 # Install Node.js (needed for npx commands)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \

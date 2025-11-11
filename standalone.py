@@ -31,6 +31,11 @@ def parse_args():
         help="Path to the local project source directory",
     )
     parser.add_argument(
+        "gen_model",
+        type=str,
+        help="model name",
+    )
+    parser.add_argument(
         "--mini",
         action="store_true",
         help="Run seedgen in mini mode",
@@ -43,7 +48,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def build_and_run_targets(project_name, src_path, fuzz_tooling, mini=False, mcp_mode=False):
+def build_and_run_targets(project_name, src_path, fuzz_tooling, gen_model, mini=False, mcp_mode=False):
     os.makedirs(".tmp", exist_ok=True)
 
     project_yaml_path = validate_environment(fuzz_tooling, project_name)
@@ -70,7 +75,7 @@ def build_and_run_targets(project_name, src_path, fuzz_tooling, mini=False, mcp_
                       src_path, fuzz_tooling, task=mock_task)
     else:
         run_full_mode(project_name, project_config,
-                      src_path, fuzz_tooling, task=mock_task)
+                      src_path, fuzz_tooling, gen_model, task=mock_task)
 
 
 def main():
@@ -80,6 +85,7 @@ def main():
     fuzz_tooling = args.fuzz_tooling
     mini = args.mini
     mcp_mode = args.mcp
+    gen_model = args.gen_model
 
     build_and_run_targets(project_name, src_path, fuzz_tooling, mini, mcp_mode)
 

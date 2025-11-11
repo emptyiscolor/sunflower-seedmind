@@ -35,7 +35,7 @@ class HarnessInfo:
 class SeedGenAgent:
     """Agent responsible for generating seeds based on various strategies."""
 
-    def __init__(self, result_dir: str, ip_addr: str, project_name: str, harness_binary: str, gen_model: str):
+    def __init__(self, result_dir: str, ip_addr: str, project_name: str, harness_binary: str, gen_model: str = "gpt-4.1"):
         """Initialize the SeedGenAgent.
 
         Args:
@@ -53,7 +53,6 @@ class SeedGenAgent:
         self.tracker = Tracker()
         self.tracker.set_log_dir(result_dir)
         SeedGen2GenerativeModel.set_custom_model(gen_model)
-
 
     def _find_harness_function(self, functions: List[FunctionInfo]) -> Optional[FunctionInfo]:
         return next(
@@ -89,7 +88,8 @@ class SeedGenAgent:
             project_name=self.project_name,
         )
 
-        filetype_result = filetype_result.translate(str.maketrans('', '', "\"'`")) # remove quotes and ticks
+        filetype_result = filetype_result.translate(
+            str.maketrans('', '', "\"'`"))  # remove quotes and ticks
 
         logging.info(f"Identified file type: {filetype_result}")
 
@@ -97,7 +97,8 @@ class SeedGenAgent:
             logging.info(f"Unknown filetype, skipping script regeneration")
             return prev_result
 
-        reference_script = generate_reference_script(self.seedd, self.harness_binary, filetype_result)
+        reference_script = generate_reference_script(
+            self.seedd, self.harness_binary, filetype_result)
 
         return generate_based_on_filetype(
             self.seedd,
@@ -127,20 +128,21 @@ class SeedGenAgent:
         current_script = current_result.generator_script
         current_doc = update_doc(
             self.seedd, current_result.seed_evaluation_result, functions, self.harness_binary)
-        
+
         # Experiment with doing filetype first
         current_result = self._generate_filetype_seeds(
             current_result, current_doc, harness_info)
-        
+
         # Alignment once afterwards
         current_doc = update_doc(
             self.seedd, current_result.seed_evaluation_result, functions, self.harness_binary, current_doc)
-        
+
         current_result = align_script(
-                self.seedd, current_result.generator_script, current_doc, self.harness_binary)
+            self.seedd, current_result.generator_script, current_doc, self.harness_binary)
 
         # Finally, evaluate the coverage
-        merged_coverage_report = get_merged_coverage(self.seedd, self.harness_binary)
+        merged_coverage_report = get_merged_coverage(
+            self.seedd, self.harness_binary)
         with open(os.path.join(self.seedd.shared_dir, merged_coverage_report.report), "r") as f:
             report = f.read()
         with open(os.path.join(self.result_dir, "merged_coverage.txt"), "w") as f:
