@@ -1,5 +1,5 @@
 # CallGraph runtime builder
-FROM gcr.io/oss-fuzz-base/base-builder AS builder_callgraph
+FROM gcr.io/oss-fuzz-base/base-builder@sha256:0241b5bf8a95a788807fd6632d544a0bae7289bd17f04b766dec79db7acab5f5 AS builder_callgraph
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /app
@@ -7,13 +7,13 @@ COPY callgraph/runtime runtime
 RUN cd runtime && cargo build --release
 
 # CallGraph LLVM Pass builder
-FROM gcr.io/oss-fuzz-base/base-builder AS builder_llvm_pass
+FROM gcr.io/oss-fuzz-base/base-builder@sha256:0241b5bf8a95a788807fd6632d544a0bae7289bd17f04b766dec79db7acab5f5 AS builder_llvm_pass
 WORKDIR /app
 COPY callgraph/llvm /app/llvm
 RUN cd llvm && ./build.sh
 
 # Argus builder
-FROM gcr.io/oss-fuzz-base/base-builder AS builder_argus
+FROM gcr.io/oss-fuzz-base/base-builder@sha256:0241b5bf8a95a788807fd6632d544a0bae7289bd17f04b766dec79db7acab5f5 AS builder_argus
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /app
@@ -21,7 +21,7 @@ COPY argus/ /app/argus/
 RUN cd argus && cargo build --release
 
 # Bandld builder
-FROM gcr.io/oss-fuzz-base/base-builder AS builder_bandld
+FROM gcr.io/oss-fuzz-base/base-builder@sha256:0241b5bf8a95a788807fd6632d544a0bae7289bd17f04b766dec79db7acab5f5 AS builder_bandld
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /app
@@ -29,7 +29,7 @@ COPY bandld/ /app/bandld/
 RUN cd bandld && cargo build --release
 
 # GetCov builder
-FROM gcr.io/oss-fuzz-base/base-builder AS builder_getcov
+FROM gcr.io/oss-fuzz-base/base-builder@sha256:0241b5bf8a95a788807fd6632d544a0bae7289bd17f04b766dec79db7acab5f5 AS builder_getcov
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /app
@@ -37,7 +37,7 @@ COPY getcov/ /app/getcov/
 RUN cd getcov && cargo build --release
 
 # SeedD builder
-FROM gcr.io/oss-fuzz-base/base-builder AS builder_seedd
+FROM gcr.io/oss-fuzz-base/base-builder@sha256:0241b5bf8a95a788807fd6632d544a0bae7289bd17f04b766dec79db7acab5f5 AS builder_seedd
 COPY --from=golang:1.22 /usr/local/go /usr/local/go
 ENV PATH="/usr/local/go/bin:${PATH}"
 WORKDIR /app
