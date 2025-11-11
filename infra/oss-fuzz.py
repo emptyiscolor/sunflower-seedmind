@@ -440,6 +440,8 @@ def build_and_run_targets(project_name, harness_binaries, src_path, root, rebuil
 
 def run_mini_mode(project_name, project_config, harness_binaries, src_path, root, all=False, model_name="gpt-4.1"):
     try:
+        print("[+] Running Mini mode for %s with model: %s" %
+              (project_name, model_name))
         artifacts_dir = os.path.abspath(os.path.join(".tmp", project_name))
         os.makedirs(artifacts_dir, exist_ok=True)
 
@@ -453,7 +455,8 @@ def run_mini_mode(project_name, project_config, harness_binaries, src_path, root
         is_java = project_config["language"] in ["jvm", "java"]
 
         fuzzers = find_files_with_fuzzer_function(
-            src_path, oss_fuzz_project_dir, is_java)
+            src_path, oss_fuzz_project_dir, is_java)  # if is_java else compile_project(
+        # root, project_name, project_config, src_path, False)
 
         if all:
             print(
