@@ -101,6 +101,7 @@ cython_debug/
 prebuilt/
 .tmp/
 .vscode/
+magma/
 
 # AIxCC stuffs
 userspace-fuzzing-corpus/
