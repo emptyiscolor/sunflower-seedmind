@@ -22,6 +22,21 @@ class PlainTextState(TypedDict):
 def NODE_prompt(state: PlainTextState):
     messages = []
     messages.append(HumanMessage(content=state['prompt']))
+    # truncate messages if too long
+    max_length = 272000
+    total_length = sum(len(msg.content)
+                       for msg in messages if hasattr(msg, 'content'))
+    if total_length > max_length:
+        truncated_messages = []
+        current_length = 0
+        for msg in reversed(messages):
+            msg_length = len(msg.content) if hasattr(msg, 'content') else 0
+            if current_length + msg_length <= max_length:
+                truncated_messages.insert(0, msg)
+                current_length += msg_length
+            else:
+                break
+        messages = truncated_messages
     response = state['model'].invoke(messages)
     messages.append(response)
     return {
