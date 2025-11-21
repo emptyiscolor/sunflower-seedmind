@@ -18,6 +18,7 @@ from seedgen2.utils.tracker import Tracker
 
 import re
 
+
 class SowbotPrompts:
     REQUIREMENTS_PROMPT = """
 ## Requirements for the Python Script:
@@ -115,6 +116,12 @@ class GenerationNode:
                      state['prompt'][:100]}...")
         model = state['model']
         messages = [HumanMessage(content=state["prompt"])]
+        # Truncate message content if it exceeds max length
+        max_length = 272000
+        if len(messages[0].content) > max_length:
+            logging.warning(
+                f"Truncating prompt from {len(messages[0].content)} to {max_length} characters")
+            messages[0].content = messages[0].content[:max_length]
         response = model.invoke(messages)
 
         return {"messages": messages + [response]}
