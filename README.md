@@ -51,15 +51,3 @@ To run SeedGen2 for the `libxml2` project with the `xml` harness:
 ```shell
 python3 oss-fuzz.py libxml2 xml
 ```
-
-## Author
-
-- [Wenxuan Shi](mailto:wenxuan.shi@northwestern.edu)
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request if you have any improvements or suggestions.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
