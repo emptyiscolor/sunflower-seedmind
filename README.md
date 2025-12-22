@@ -51,3 +51,51 @@ To run SeedGen2 for the `libxml2` project with the `xml` harness:
 ```shell
 python3 oss-fuzz.py libxml2 xml
 ```
+
+To run seedmind for libxml2 project for all harnesses:
+
+```shell
+# set up the LiteLLM variables
+export LITELLM_BASE_URL=https://your.litellm.host
+export LITELLM_KEY=sk-your_private_key
+export SEEDGEN_KNOWLEDGEABLE_MODEL=openai/gpt-5-mini
+export SEEDGEN_GENERATIVE_MODEL=openai/gpt-5-mini
+export SEEDGEN_INFER_MODEL=openai/gpt-5.1
+export GEN_MODEL_LIST=openai/gpt-5-mini,openai/gpt-5.1
+export OSSFUZZ_PATH=/workspaces/oss-fuzz-harnessagent
+
+# src_path is the external source code path of target project
+
+python infra/oss-fuzz.py --root /workspaces/oss-fuzz-harnessagent --model gpt-5-mini --src_path "$src_path" libxml2 --all
+```
+
+### Run with Docker:
+
+set up the environment variables
+
+```shell
+cat <<'EOF' > .env
+LITELLM_BASE_URL=https://your.litellm.host
+LITELLM_KEY=sk-your_private_key
+SEEDGEN_KNOWLEDGEABLE_MODEL=openai/gpt-5-mini
+SEEDGEN_GENERATIVE_MODEL=openai/gpt-5-mini
+SEEDGEN_INFER_MODEL=openai/gpt-5.1
+GEN_MODEL_LIST=openai/gpt-5-mini,openai/gpt-5.1
+OSSFUZZ_PATH=/workspaces/oss-fuzz-harnessagent
+PROJECT=libxml2
+HARNESSNAME=html
+EOF
+```
+
+
+```
+docker run -it \
+  --env-file .env \
+  --privileged \
+  --entrypoint=/entrypoint_harnessagent.sh \
+  --rm \
+  -v $PWD/entrypoint_harnessagent.sh:/entrypoint_harnessagent.sh \
+  -v /path/to/save/corpus:/workspaces/corpus \
+  -v /path/to/ossfuzz:/workspaces/oss-fuzz-harnessagent \
+  ghcr.io/emptyiscolor/sunflower-seedmind:latest
+```
