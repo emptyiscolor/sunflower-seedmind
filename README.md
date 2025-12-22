@@ -75,6 +75,7 @@ set up the environment variables
 
 ```shell
 cat <<'EOF' > .env
+PYTHONPATH=/app
 LITELLM_BASE_URL=https://your.litellm.host
 LITELLM_KEY=sk-your_private_key
 SEEDGEN_KNOWLEDGEABLE_MODEL=openai/gpt-5-mini
@@ -87,15 +88,20 @@ HARNESSNAME=html
 EOF
 ```
 
+And the one-shot generation.
 
 ```
+# pull the latest image
+docker pull ghcr.io/emptyiscolor/sunflower-seedmind:latest
+
+# the corpus will be save under /var/tmp/corpus
 docker run -it \
   --env-file .env \
   --privileged \
   --entrypoint=/entrypoint_harnessagent.sh \
   --rm \
   -v $PWD/entrypoint_harnessagent.sh:/entrypoint_harnessagent.sh \
-  -v /path/to/save/corpus:/workspaces/corpus \
-  -v /path/to/ossfuzz:/workspaces/oss-fuzz-harnessagent \
+  -v /var/tmp/corpus:/workspaces/corpus \
+  -v /mnt/ssd/fuzzing/oss-fuzz-private:/workspaces/oss-fuzz-harnessagent \
   ghcr.io/emptyiscolor/sunflower-seedmind:latest
 ```
