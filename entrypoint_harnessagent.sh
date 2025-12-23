@@ -21,8 +21,7 @@ seeds_agg_dir="/workspaces/corpus"
 mkdir -p "$seeds_agg_dir"
 
 # Commands go here
-python infra/oss-fuzz.py --root $OSSFUZZ_PATH --model $SEEDGEN_GENERATIVE_MODEL $PROJECT $HARNESSNAME && \
-    echo "Seeds generated successfully"
+python infra/oss-fuzz.py --root $OSSFUZZ_PATH --model $SEEDGEN_GENERATIVE_MODEL $PROJECT $HARNESSNAME 
 
 # find "/app/.tmp/$PROJECT" -type d -name "seeds"
 # Find all seeds folders within the project directory
