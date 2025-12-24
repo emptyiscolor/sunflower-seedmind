@@ -500,8 +500,14 @@ def run_full_mode(project_name, project_config, harness_binaries, src_path, root
             shutil.copytree(os.path.join(project_dir, "work"),
                             os.path.join(fuzzer_dir, "work"))
             # get ip address of the seedd container, the container id is container_id
-            ip_addr = subprocess.check_output(
+            try:
+                ip_addr = subprocess.check_output(
                 ["docker", "inspect", "-f", "{{.NetworkSettings.IPAddress}}", container_id]).decode().strip()
+            except Exception as e:
+                # for higer docker versions
+                ip_addr = subprocess.check_output(
+                ["docker", "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", container_id]).decode().strip()
+            
             agent = SeedGenAgent(fuzzer_dir, ip_addr,
                                  project_name, harness_binary, model_name)
             agent.run()
