@@ -1,5 +1,7 @@
 # SeedGen2 (Project Sunflower)
 
+**Note:** This repository is a standalone fork of the `seedgen` component from [42-b3yond-6ug-crs](https://github.com/42-b3yond-6ug/42-b3yond-6ug-crs/tree/main/components/seedgen).
+
 ## Overview
 
 SeedGen2 is a framework designed to generate initial seeds for OSS-Fuzz, enhancing the effectiveness of fuzzing. By leveraging the capabilities of large language models, SeedGen2 can create valid seeds and improve them using harness and coverage information.
