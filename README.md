@@ -106,4 +106,7 @@ docker run -it \
   -v /var/tmp/corpus:/workspaces/corpus \
   -v /mnt/ssd/fuzzing/oss-fuzz-private:/workspaces/oss-fuzz-harnessagent \
   ghcr.io/emptyiscolor/sunflower-seedmind:latest
+
 ```
+
+Then the AI-generated seeds will be collected to `/var/tmp/corpus`.
