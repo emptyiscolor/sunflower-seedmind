@@ -6,7 +6,7 @@
 	},
 	"features": {
 		"ghcr.io/mikaello/devcontainer-features/modern-shell-utils:2": {},
-		"ghcr.io/devcontainers/features/docker-in-docker:2": {},
+		"ghcr.io/devcontainers/features/docker-in-docker:3": {},
 		"ghcr.io/devcontainers/features/rust:1": {},
 		"ghcr.io/devcontainers-community/features/llvm": {},
 		"ghcr.io/devcontainers/features/go:1": {},
